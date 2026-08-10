@@ -60,7 +60,7 @@ compile_commands:
 	elif command -v compiledb >/dev/null 2>&1; then \
 		compiledb -- $(MAKE) clean release; \
 	else \
-		printf "[]\n" > compile_commands.json; \
+		echo "Aviso: bear ou compiledb nao instalados. compile_commands.json nao foi alterado."; \
 	fi
 
 clean:
