@@ -35,8 +35,38 @@ Este projeto consiste em um simulador de escalonamento de processos desenvolvido
 
 ## Pré-requisitos e Dependências
 
-*A definir.*
+- `gcc`
+- `make`
+- Opcional para editores: `bear` ou `compiledb` para gerar `compile_commands.json`
+- No Windows deste ambiente, use `mingw32-make` se `make` não estiver no PATH
+
+## Estrutura
+
+```text
+src/                 código C
+include/             cabeçalhos
+configs/             configurações chave=valor
+tests/               testes mínimos
+scripts/             scripts auxiliares
+results/raw/         resultados brutos ignorados pelo Git
+results/consolidated resultados consolidados versionados
+results/figures      gráficos versionados
+docs/                especificações e decisões
+artigo/              entregável em formato de artigo
+```
 
 ## Compilação e Execução
 
-*A definir.*
+```sh
+make                 # build otimizado em bin/simulador
+make dev             # build com -g e sanitizers no Linux/CI
+make release         # build otimizado com -O2
+make test            # autoteste do executável
+make simulate        # execução simples documentada
+make batch           # exemplo de lote em results/raw/
+make graphs          # prepara diretório de figuras
+make compile_commands
+make clean           # remove build, bin e results/raw/
+```
+
+`make clean` não remove `docs/`, `artigo/`, `results/consolidated/` nem `results/figures/`.
