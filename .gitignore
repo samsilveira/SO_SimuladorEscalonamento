@@ -55,8 +55,3 @@ dkms.conf
 *.dwo
 
 graphify-out/*
-.env
-build/
-bin/
-compile_commands.json
-results/raw/

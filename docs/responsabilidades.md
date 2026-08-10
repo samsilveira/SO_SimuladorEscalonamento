@@ -4,7 +4,7 @@
 | :--- | :--- | :--- |
 | Elder Rayan Oliveira Silva (@eldrayan) | #3 | - |
 | Espedito Ramom Mascena Ricarto (@RamomRicarto) | - | - |
-| Manoel Junio Duarte da Silva (@Junio404) | #2 | Estrutura inicial, Makefile, CI, templates e regras de contribuição |
+| Manoel Junio Duarte da Silva (@Junio404) | - | - |
 | Pedro Yan Alcantara Palácio (@pedropalacioo) | - | - |
 | Sabrina Alencar Soares (@sabrinaalencar) | - | - |
 | Samuel Wagner Tiburi Silveira (@samsilveira) | - | - |
