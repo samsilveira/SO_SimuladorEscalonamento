@@ -176,4 +176,5 @@ int main(int argc, char **argv) {
 
     write_result(stdout, &cfg);
     return 0;
-}
+}erro_intencional
+erro_intencional
