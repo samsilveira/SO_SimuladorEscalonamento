@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -36,6 +35,16 @@ static Config default_config(void) {
 static int parse_u64(const char *text, uint64_t *out) {
     char *end = NULL;
     unsigned long long value;
+
+    if (text == NULL || *text == '\0') {
+        return 0;
+    }
+    while (*text == ' ' || *text == '\t') {
+        text++;
+    }
+    if (*text == '-') {
+        return 0;
+    }
 
     errno = 0;
     value = strtoull(text, &end, 10);
@@ -138,15 +147,14 @@ static int run_self_test(void) {
     int value = 0;
     Config cfg = default_config();
 
-    assert(parse_u64("42", &seed));
-    assert(seed == 42);
-    assert(!parse_u64("42x", &seed));
-    assert(parse_positive_int("1000", &value));
-    assert(value == 1000);
-    assert(!parse_positive_int("0", &value));
-    assert(cfg.process_count == 1000);
-    assert(cfg.context_switch_cost == 1);
-    assert(cfg.rr_quantum == 4);
+    if (!parse_u64("42", &seed) || seed != 42) return 1;
+    if (parse_u64("42x", &seed)) return 1;
+    if (parse_u64("-1", &seed)) return 1;
+    if (!parse_positive_int("1000", &value) || value != 1000) return 1;
+    if (parse_positive_int("0", &value)) return 1;
+    if (cfg.process_count != 1000) return 1;
+    if (cfg.context_switch_cost != 1) return 1;
+    if (cfg.rr_quantum != 4) return 1;
 
     return 0;
 }
