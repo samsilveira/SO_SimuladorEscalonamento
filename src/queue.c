@@ -33,12 +33,12 @@ bool queue_contains_pid(ProcessQueue *q, int pid) {
 
 bool queue_insert(ProcessQueue *q, Process *p) {
     if (!q || !p) return false;
-    
+
     if (queue_contains_pid(q, p->pid)) return false;
-    
+
     // Validate states
     if (q->type == QUEUE_READY) {
-        if (p->state == PROCESS_NEW || p->state == PROCESS_BLOCKED || p->state == PROCESS_FINISHED) {
+        if (p->state != PROCESS_READY) {
             return false;
         }
     } else if (q->type == QUEUE_FUTURE) {
@@ -50,24 +50,24 @@ bool queue_insert(ProcessQueue *q, Process *p) {
             return false;
         }
     }
-    
+
     ProcessNode *node = (ProcessNode*)malloc(sizeof(ProcessNode));
     if (!node) return false;
     node->process = p;
     node->next = NULL;
-    
+
     if (q->head == NULL) {
         q->head = node;
         return true;
     }
-    
+
     if (q->comparator) {
         if (q->comparator(p, q->head->process)) {
             node->next = q->head;
             q->head = node;
             return true;
         }
-        
+
         ProcessNode *curr = q->head;
         while (curr->next != NULL && !q->comparator(p, curr->next->process)) {
             curr = curr->next;
