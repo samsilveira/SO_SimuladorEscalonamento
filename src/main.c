@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "test_process.h"
+#include "workload.h"
 
 #define SIMULADOR_VERSION "1.0.0"
 
@@ -45,7 +46,7 @@ static int parse_u64(const char *text, uint64_t *out) {
         text++;
     }
     if (*text == '-') {
-        return 0; // Impede explicitamente valores negativos
+        return 0; 
     }
 
     errno = 0;
@@ -58,7 +59,6 @@ static int parse_u64(const char *text, uint64_t *out) {
     return 1;
 }
 
-// Nova função para validação de faixas em conformidade com docs/decisoes.md
 static int parse_int_in_range(const char *text, int *out, int min, int max) {
     char *end = NULL;
     long value;
@@ -145,7 +145,6 @@ static int parse_args(int argc, char **argv, Config *cfg) {
 }
 
 static void write_result(FILE *out, const Config *cfg) {
-    // Escreve os metadados e as métricas zeradas no formato JSON especificado.
     fprintf(out, "{\n");
     fprintf(out, "  \"version\": \"1.0\",\n");
     fprintf(out, "  \"algorithm\": \"%s\",\n", cfg->algorithm);
@@ -167,22 +166,19 @@ static int run_self_test(void) {
     int value = 0;
     Config cfg = default_config();
 
-    // Testa parsing de uint64
     if (!parse_u64("42", &seed) || seed != 42) return 1;
     if (parse_u64("42x", &seed)) return 1;
     if (parse_u64("-1", &seed)) return 1;
     
-    // Testa limites e validacao
     if (!parse_int_in_range("1000", &value, 1, 100000) || value != 1000) return 1;
-    if (parse_int_in_range("0", &value, 1, 100000)) return 1; // 0 rejeitado (fora do min)
-    if (parse_int_in_range("100001", &value, 1, 100000)) return 1; // maior q max
-    if (parse_int_in_range("-1", &value, 0, 1000000)) return 1; // negativo rejeitado em range positivo
+    if (parse_int_in_range("0", &value, 1, 100000)) return 1; 
+    if (parse_int_in_range("100001", &value, 1, 100000)) return 1; 
+    if (parse_int_in_range("-1", &value, 0, 1000000)) return 1; 
 
     if (cfg.process_count != 1000) return 1;
     if (cfg.context_switch_cost != 1) return 1;
     if (cfg.rr_quantum != 4) return 1;
 
-    // Roda a suite de testes dos processos e filas
     if (process_run_all_tests() != 0) return 1;
 
     printf("Todos os self-tests passaram com sucesso!\n");
@@ -201,7 +197,16 @@ int main(int argc, char **argv) {
         return run_self_test();
     }
 
-    // Exportacao do Resultado final via configuracao JSON
+    ProcessQueue *workload = workload_generate(cfg.process_count, cfg.scenario, cfg.seed);
+    if (workload != NULL) {
+        if (!workload_export_csv(workload, "load.csv")) {
+            fprintf(stderr, "Erro ao tentar salvar o arquivo load.csv\n");
+        }
+    } else {
+        fprintf(stderr, "Erro crítico na geração da carga de processos.\n");
+        return 1;
+    }
+
     if (cfg.output_path != NULL) {
         FILE *file = fopen(cfg.output_path, "w");
         if (file == NULL) {
@@ -210,9 +215,13 @@ int main(int argc, char **argv) {
         }
         write_result(file, &cfg);
         fclose(file);
-        return 0;
+    } else {
+        write_result(stdout, &cfg);
     }
 
-    write_result(stdout, &cfg);
+    if (workload != NULL) {
+        queue_destroy(workload);
+    }
+
     return 0;
 }
