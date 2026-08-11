@@ -42,6 +42,16 @@ bool process_add_burst(Process *p, int cpu_time, int io_time) {
         return false;
     }
     
+    if (p->bursts != NULL) {
+        Burst *curr = p->bursts;
+        while (curr->next) {
+            curr = curr->next;
+        }
+        if (curr->io_time == 0) {
+            return false; // Cannot add burst after a burst with io_time == 0
+        }
+    }
+    
     Burst *b = (Burst*)malloc(sizeof(Burst));
     if (!b) return false;
     
