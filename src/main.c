@@ -66,7 +66,7 @@ static int parse_int_in_range(const char *text, int *out, int min, int max) {
     errno = 0;
     value = strtol(text, &end, 10);
     if (errno != 0 || end == text || *end != '\0' || value < min || value > max) {
-        return 0; // Rejeita letras, fora dos limites, ou erros de parse
+        return 0; 
     }
 
     *out = (int)value;
@@ -220,6 +220,10 @@ int main(int argc, char **argv) {
     }
 
     if (workload != NULL) {
+        while (!queue_is_empty(workload)) {
+            Process *p = queue_pop(workload);
+            process_destroy(p);
+        }
         queue_destroy(workload);
     }
 
