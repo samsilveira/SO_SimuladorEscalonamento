@@ -7,7 +7,7 @@
 
 #include "test_process.h"
 
-#define SIMULADOR_VERSION "0.1.0"
+#define SIMULADOR_VERSION "1.0.0"
 
 typedef struct {
     const char *scenario;
@@ -45,7 +45,7 @@ static int parse_u64(const char *text, uint64_t *out) {
         text++;
     }
     if (*text == '-') {
-        return 0;
+        return 0; // Impede explicitamente valores negativos
     }
 
     errno = 0;
@@ -58,14 +58,15 @@ static int parse_u64(const char *text, uint64_t *out) {
     return 1;
 }
 
-static int parse_positive_int(const char *text, int *out) {
+// Nova função para validação de faixas em conformidade com docs/decisoes.md
+static int parse_int_in_range(const char *text, int *out, int min, int max) {
     char *end = NULL;
     long value;
 
     errno = 0;
     value = strtol(text, &end, 10);
-    if (errno != 0 || end == text || *end != '\0' || value <= 0 || value > 1000000L) {
-        return 0;
+    if (errno != 0 || end == text || *end != '\0' || value < min || value > max) {
+        return 0; // Rejeita letras, fora dos limites, ou erros de parse
     }
 
     *out = (int)value;
@@ -74,7 +75,7 @@ static int parse_positive_int(const char *text, int *out) {
 
 static int next_arg(int argc, char **argv, int *index, const char **value) {
     if (*index + 1 >= argc) {
-        fprintf(stderr, "argumento sem valor: %s\n", argv[*index]);
+        fprintf(stderr, "Erro: argumento sem valor para a opcao %s\n", argv[*index]);
         return 0;
     }
     *index += 1;
@@ -89,10 +90,22 @@ static int parse_args(int argc, char **argv, Config *cfg) {
         const char *value = NULL;
 
         if (strcmp(argv[i], "--help") == 0) {
-            printf("uso: %s [--scenario nome] [--seed n] [--algorithm nome] [--processes n] [--output arquivo]\n", argv[0]);
+            printf("Uso: %s [opcoes]\n", argv[0]);
+            printf("\nOpcoes de Simulacao:\n");
+            printf("  --scenario NOME         Cenario de simulacao (equilibrado, io_bound, cpu_bound, prioridades_desbalanceadas). Padrao: equilibrado\n");
+            printf("  --algorithm NOME        Algoritmo de escalonamento (fcfs, rr, prioridade, proprio). Padrao: fcfs\n");
+            printf("  --seed N                Semente do gerador pseudoaleatorio (inteiro 64 bits nao negativo). Padrao: 1\n");
+            printf("  --processes N           Quantidade de processos a simular (1 a 100000). Padrao: 1000\n");
+            printf("  --context-switch-cost N Custo de troca de contexto em ticks (0 a 1000000). Padrao: 1\n");
+            printf("  --rr-quantum N          Quantum do algoritmo Round Robin em ticks (1 a 1000000). Padrao: 4\n");
+            printf("\nOutras Opcoes:\n");
+            printf("  --output ARQUIVO        Arquivo para salvar o resultado em formato JSON\n");
+            printf("  --self-test             Executa os testes internos de validacao dos modulos\n");
+            printf("  --version               Exibe a versao do simulador\n");
+            printf("  --help                  Exibe esta mensagem de ajuda detalhada\n");
             return 0;
         } else if (strcmp(argv[i], "--version") == 0) {
-            printf("%s\n", SIMULADOR_VERSION);
+            printf("Versao: %s\n", SIMULADOR_VERSION);
             return 0;
         } else if (strcmp(argv[i], "--self-test") == 0) {
             cfg->self_test = 1;
@@ -104,26 +117,26 @@ static int parse_args(int argc, char **argv, Config *cfg) {
             if (!next_arg(argc, argv, &i, &cfg->output_path)) return -1;
         } else if (strcmp(argv[i], "--seed") == 0) {
             if (!next_arg(argc, argv, &i, &value) || !parse_u64(value, &cfg->seed)) {
-                fprintf(stderr, "seed invalida\n");
+                fprintf(stderr, "Erro: Semente invalida. Deve ser um inteiro positivo (64-bits).\n");
                 return -1;
             }
         } else if (strcmp(argv[i], "--processes") == 0) {
-            if (!next_arg(argc, argv, &i, &value) || !parse_positive_int(value, &cfg->process_count)) {
-                fprintf(stderr, "quantidade de processos invalida\n");
+            if (!next_arg(argc, argv, &i, &value) || !parse_int_in_range(value, &cfg->process_count, 1, 100000)) {
+                fprintf(stderr, "Erro: Quantidade de processos invalida. Permitido: 1 a 100000.\n");
                 return -1;
             }
         } else if (strcmp(argv[i], "--context-switch-cost") == 0) {
-            if (!next_arg(argc, argv, &i, &value) || !parse_positive_int(value, &cfg->context_switch_cost)) {
-                fprintf(stderr, "custo de troca invalido\n");
+            if (!next_arg(argc, argv, &i, &value) || !parse_int_in_range(value, &cfg->context_switch_cost, 0, 1000000)) {
+                fprintf(stderr, "Erro: Custo de troca de contexto invalido. Permitido: 0 a 1000000.\n");
                 return -1;
             }
         } else if (strcmp(argv[i], "--rr-quantum") == 0) {
-            if (!next_arg(argc, argv, &i, &value) || !parse_positive_int(value, &cfg->rr_quantum)) {
-                fprintf(stderr, "quantum invalido\n");
+            if (!next_arg(argc, argv, &i, &value) || !parse_int_in_range(value, &cfg->rr_quantum, 1, 1000000)) {
+                fprintf(stderr, "Erro: Quantum invalido. Permitido: 1 a 1000000.\n");
                 return -1;
             }
         } else {
-            fprintf(stderr, "argumento desconhecido: %s\n", argv[i]);
+            fprintf(stderr, "Erro: Argumento desconhecido: %s\n", argv[i]);
             return -1;
         }
     }
@@ -132,16 +145,21 @@ static int parse_args(int argc, char **argv, Config *cfg) {
 }
 
 static void write_result(FILE *out, const Config *cfg) {
-    fprintf(out, "schema_version,run_id,workload_sha256,algorithm,scenario,seed,process_count,context_switch_cost,rr_quantum,makespan,mean_turnaround,context_switches,jain_slowdown_pct,status\n");
-    fprintf(out, "1,%s-%" PRIu64 ",pending,%s,%s,%" PRIu64 ",%d,%d,%d,0,0,0,100,stub\n",
-            cfg->scenario,
-            cfg->seed,
-            cfg->algorithm,
-            cfg->scenario,
-            cfg->seed,
-            cfg->process_count,
-            cfg->context_switch_cost,
-            cfg->rr_quantum);
+    // Escreve os metadados e as métricas zeradas no formato JSON especificado.
+    fprintf(out, "{\n");
+    fprintf(out, "  \"version\": \"1.0\",\n");
+    fprintf(out, "  \"algorithm\": \"%s\",\n", cfg->algorithm);
+    fprintf(out, "  \"scenario\": \"%s\",\n", cfg->scenario);
+    fprintf(out, "  \"seed\": %" PRIu64 ",\n", cfg->seed);
+    fprintf(out, "  \"quantum\": %d,\n", cfg->rr_quantum);
+    fprintf(out, "  \"context_switch_cost\": %d,\n", cfg->context_switch_cost);
+    fprintf(out, "  \"n_processes\": %d,\n", cfg->process_count);
+    fprintf(out, "  \"metrics\": {\n");
+    fprintf(out, "    \"avg_turnaround\": 0,\n");
+    fprintf(out, "    \"total_context_switches\": 0,\n");
+    fprintf(out, "    \"jain_fairness_pct\": 0\n");
+    fprintf(out, "  }\n");
+    fprintf(out, "}\n");
 }
 
 static int run_self_test(void) {
@@ -149,17 +167,25 @@ static int run_self_test(void) {
     int value = 0;
     Config cfg = default_config();
 
+    // Testa parsing de uint64
     if (!parse_u64("42", &seed) || seed != 42) return 1;
     if (parse_u64("42x", &seed)) return 1;
     if (parse_u64("-1", &seed)) return 1;
-    if (!parse_positive_int("1000", &value) || value != 1000) return 1;
-    if (parse_positive_int("0", &value)) return 1;
+    
+    // Testa limites e validacao
+    if (!parse_int_in_range("1000", &value, 1, 100000) || value != 1000) return 1;
+    if (parse_int_in_range("0", &value, 1, 100000)) return 1; // 0 rejeitado (fora do min)
+    if (parse_int_in_range("100001", &value, 1, 100000)) return 1; // maior q max
+    if (parse_int_in_range("-1", &value, 0, 1000000)) return 1; // negativo rejeitado em range positivo
+
     if (cfg.process_count != 1000) return 1;
     if (cfg.context_switch_cost != 1) return 1;
     if (cfg.rr_quantum != 4) return 1;
 
+    // Roda a suite de testes dos processos e filas
     if (process_run_all_tests() != 0) return 1;
 
+    printf("Todos os self-tests passaram com sucesso!\n");
     return 0;
 }
 
@@ -175,6 +201,7 @@ int main(int argc, char **argv) {
         return run_self_test();
     }
 
+    // Exportacao do Resultado final via configuracao JSON
     if (cfg.output_path != NULL) {
         FILE *file = fopen(cfg.output_path, "w");
         if (file == NULL) {
