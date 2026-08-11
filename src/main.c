@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "test_process.h"
+
 #define SIMULADOR_VERSION "0.1.0"
 
 typedef struct {
@@ -155,6 +157,8 @@ static int run_self_test(void) {
     if (cfg.process_count != 1000) return 1;
     if (cfg.context_switch_cost != 1) return 1;
     if (cfg.rr_quantum != 4) return 1;
+
+    if (process_run_all_tests() != 0) return 1;
 
     return 0;
 }
