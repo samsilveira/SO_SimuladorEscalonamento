@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "algorithm": "fcfs",
+  "scenario": "io_bound",
+  "seed": 42,
+  "quantum": 2,
+  "context_switch_cost": 1,
+  "n_processes": 500,
+  "metrics": {
+    "avg_turnaround": 0,
+    "total_context_switches": 0,
+    "jain_fairness_pct": 0
+  }
+}
