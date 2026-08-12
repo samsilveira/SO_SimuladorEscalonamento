@@ -113,8 +113,16 @@ static int parse_args(int argc, char **argv, Config *cfg) {
             cfg->self_test = 1;
         } else if (strcmp(argv[i], "--scenario") == 0) {
             if (!next_arg(argc, argv, &i, &cfg->scenario)) return -1;
+            if (!workload_is_valid_scenario(cfg->scenario)) {
+                fprintf(stderr, "Erro: Cenario invalido: '%s'. Opcoes permitidas: equilibrado, io_bound, cpu_bound, prioridades_desbalanceadas\n", cfg->scenario);
+                return -1;
+            }
         } else if (strcmp(argv[i], "--algorithm") == 0) {
             if (!next_arg(argc, argv, &i, &cfg->algorithm)) return -1;
+            if (!workload_is_valid_algorithm(cfg->algorithm)) {
+                fprintf(stderr, "Erro: Algoritmo invalido: '%s'. Opcoes permitidas: fcfs, rr, prioridade, proprio\n", cfg->algorithm);
+                return -1;
+            }
         } else if (strcmp(argv[i], "--output") == 0) {
             if (!next_arg(argc, argv, &i, &cfg->output_path)) return -1;
         } else if (strcmp(argv[i], "--seed") == 0) {
@@ -181,6 +189,36 @@ static int run_self_test(void) {
     if (cfg.process_count != 1000) return 1;
     if (cfg.context_switch_cost != 1) return 1;
     if (cfg.rr_quantum != 4) return 1;
+
+    if (!workload_is_valid_scenario("equilibrado")) return 1;
+    if (!workload_is_valid_scenario("io_bound")) return 1;
+    if (!workload_is_valid_scenario("cpu_bound")) return 1;
+    if (!workload_is_valid_scenario("prioridades_desbalanceadas")) return 1;
+    if (workload_is_valid_scenario("invalido")) return 1;
+
+    if (!workload_is_valid_algorithm("fcfs")) return 1;
+    if (!workload_is_valid_algorithm("rr")) return 1;
+    if (!workload_is_valid_algorithm("prioridade")) return 1;
+    if (!workload_is_valid_algorithm("proprio")) return 1;
+    if (workload_is_valid_algorithm("invalido")) return 1;
+
+    rng_init(42, 1);
+    uint32_t r1 = rng_next();
+    uint32_t r2 = rng_next();
+    rng_init(42, 1);
+    if (rng_next() != r1 || rng_next() != r2) return 1;
+
+    if (workload_generate(10, "invalido", 42) != NULL) return 1;
+    ProcessQueue *wl = workload_generate(10, "equilibrado", 42);
+    if (!wl) return 1;
+    int count = 0;
+    while (!queue_is_empty(wl)) {
+        Process *p = queue_pop(wl);
+        process_destroy(p);
+        count++;
+    }
+    queue_destroy(wl);
+    if (count != 10) return 1;
 
     if (process_run_all_tests() != 0) return 1;
     if (simulation_run_all_tests() != 0) return 1;
