@@ -4,20 +4,49 @@
 #include <stdio.h>
 #include <string.h>
 
+int workload_is_valid_scenario(const char *scenario) {
+    if (!scenario) return 0;
+    if (strcmp(scenario, "equilibrado") == 0) return 1;
+    if (strcmp(scenario, "io_bound") == 0) return 1;
+    if (strcmp(scenario, "cpu_bound") == 0) return 1;
+    if (strcmp(scenario, "prioridades_desbalanceadas") == 0) return 1;
+    return 0;
+}
+
+int workload_is_valid_algorithm(const char *algorithm) {
+    if (!algorithm) return 0;
+    if (strcmp(algorithm, "fcfs") == 0) return 1;
+    if (strcmp(algorithm, "rr") == 0) return 1;
+    if (strcmp(algorithm, "prioridade") == 0) return 1;
+    if (strcmp(algorithm, "proprio") == 0) return 1;
+    return 0;
+}
+
 static int get_scenario_id(const char *scenario) {
+    if (!scenario) return 0;
     if (strcmp(scenario, "equilibrado") == 0) return 1;
     if (strcmp(scenario, "io_bound") == 0) return 2;
     if (strcmp(scenario, "cpu_bound") == 0) return 3;
     if (strcmp(scenario, "prioridades_desbalanceadas") == 0) return 4;
-    return 1; 
+    return 0; 
+}
+
+static void cleanup_queue_and_processes(ProcessQueue *q) {
+    if (!q) return;
+    while (!queue_is_empty(q)) {
+        Process *p = queue_pop(q);
+        process_destroy(p);
+    }
+    queue_destroy(q);
 }
 
 ProcessQueue* workload_generate(int process_count, const char *scenario, uint64_t seed) {
+    int scenario_id = get_scenario_id(scenario);
+    if (scenario_id <= 0) return NULL;
+
     ProcessQueue *q = queue_create(QUEUE_FUTURE, compare_arrival);
     if (!q) return NULL;
 
-    int scenario_id = get_scenario_id(scenario);
-    
     rng_init(seed, (uint64_t)scenario_id);
     
     int arrival = 0;
@@ -47,7 +76,6 @@ ProcessQueue* workload_generate(int process_count, const char *scenario, uint64_
             is_curto_cpu = rng_next_range(0, 1);
         }
 
-
         int num_bursts = 1;
         if (scenario_id == 2) { 
             num_bursts = rng_next_range(5, 8);
@@ -59,8 +87,12 @@ ProcessQueue* workload_generate(int process_count, const char *scenario, uint64_
         }
 
         Process *p = process_create(pid, arrival, priority);
+        if (!p) {
+            cleanup_queue_and_processes(q);
+            return NULL;
+        }
 
-        for(int i = 0; i < num_bursts; i++) {
+        for (int i = 0; i < num_bursts; i++) {
             int cpu = 1, io = 0;
 
             if (scenario_id == 2) {
@@ -82,10 +114,18 @@ ProcessQueue* workload_generate(int process_count, const char *scenario, uint64_
                 }
             }
 
-            process_add_burst(p, cpu, io);
+            if (!process_add_burst(p, cpu, io)) {
+                process_destroy(p);
+                cleanup_queue_and_processes(q);
+                return NULL;
+            }
         }
 
-        queue_insert(q, p);
+        if (!queue_insert(q, p)) {
+            process_destroy(p);
+            cleanup_queue_and_processes(q);
+            return NULL;
+        }
     }
 
     return q;
