@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "rng.h"
 #include "simulation.h"
 #include "test_process.h"
 #include "test_simulation.h"
