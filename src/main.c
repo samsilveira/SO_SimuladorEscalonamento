@@ -6,7 +6,9 @@
 #include <string.h>
 
 #include "rng.h"
+#include "simulation.h"
 #include "test_process.h"
+#include "test_simulation.h"
 #include "workload.h"
 
 #define SIMULADOR_VERSION "1.0.0"
@@ -47,7 +49,7 @@ static int parse_u64(const char *text, uint64_t *out) {
         text++;
     }
     if (*text == '-') {
-        return 0; 
+        return 0;
     }
 
     errno = 0;
@@ -67,7 +69,7 @@ static int parse_int_in_range(const char *text, int *out, int min, int max) {
     errno = 0;
     value = strtol(text, &end, 10);
     if (errno != 0 || end == text || *end != '\0' || value < min || value > max) {
-        return 0; 
+        return 0;
     }
 
     *out = (int)value;
@@ -153,7 +155,7 @@ static int parse_args(int argc, char **argv, Config *cfg) {
     return 1;
 }
 
-static void write_result(FILE *out, const Config *cfg) {
+static void write_result(FILE *out, const Config *cfg, const SimulationResult *result) {
     fprintf(out, "{\n");
     fprintf(out, "  \"version\": \"1.0\",\n");
     fprintf(out, "  \"algorithm\": \"%s\",\n", cfg->algorithm);
@@ -162,10 +164,11 @@ static void write_result(FILE *out, const Config *cfg) {
     fprintf(out, "  \"quantum\": %d,\n", cfg->rr_quantum);
     fprintf(out, "  \"context_switch_cost\": %d,\n", cfg->context_switch_cost);
     fprintf(out, "  \"n_processes\": %d,\n", cfg->process_count);
+    fprintf(out, "  \"makespan\": %d,\n", result->makespan);
     fprintf(out, "  \"metrics\": {\n");
-    fprintf(out, "    \"avg_turnaround\": 0,\n");
-    fprintf(out, "    \"total_context_switches\": 0,\n");
-    fprintf(out, "    \"jain_fairness_pct\": 0\n");
+    fprintf(out, "    \"avg_turnaround\": %.17g,\n", result->mean_turnaround);
+    fprintf(out, "    \"total_context_switches\": %d,\n", result->context_switches);
+    fprintf(out, "    \"jain_fairness_pct\": %.17g\n", result->jain_slowdown_pct);
     fprintf(out, "  }\n");
     fprintf(out, "}\n");
 }
@@ -178,11 +181,11 @@ static int run_self_test(void) {
     if (!parse_u64("42", &seed) || seed != 42) return 1;
     if (parse_u64("42x", &seed)) return 1;
     if (parse_u64("-1", &seed)) return 1;
-    
+
     if (!parse_int_in_range("1000", &value, 1, 100000) || value != 1000) return 1;
-    if (parse_int_in_range("0", &value, 1, 100000)) return 1; 
-    if (parse_int_in_range("100001", &value, 1, 100000)) return 1; 
-    if (parse_int_in_range("-1", &value, 0, 1000000)) return 1; 
+    if (parse_int_in_range("0", &value, 1, 100000)) return 1;
+    if (parse_int_in_range("100001", &value, 1, 100000)) return 1;
+    if (parse_int_in_range("-1", &value, 0, 1000000)) return 1;
 
     if (cfg.process_count != 1000) return 1;
     if (cfg.context_switch_cost != 1) return 1;
@@ -219,6 +222,7 @@ static int run_self_test(void) {
     if (count != 10) return 1;
 
     if (process_run_all_tests() != 0) return 1;
+    if (simulation_run_all_tests() != 0) return 1;
 
     printf("Todos os self-tests passaram com sucesso!\n");
     return 0;
@@ -226,7 +230,9 @@ static int run_self_test(void) {
 
 int main(int argc, char **argv) {
     Config cfg = default_config();
+    SimulationResult result = {0};
     int parsed = parse_args(argc, argv, &cfg);
+    ProcessQueue *workload = NULL;
 
     if (parsed <= 0) {
         return parsed == 0 ? 0 : 2;
@@ -236,13 +242,18 @@ int main(int argc, char **argv) {
         return run_self_test();
     }
 
-    ProcessQueue *workload = workload_generate(cfg.process_count, cfg.scenario, cfg.seed);
+    workload = workload_generate(cfg.process_count, cfg.scenario, cfg.seed);
     if (workload != NULL) {
         if (!workload_export_csv(workload, "load.csv")) {
             fprintf(stderr, "Erro ao tentar salvar o arquivo load.csv\n");
         }
     } else {
-        fprintf(stderr, "Erro crítico na geração da carga de processos.\n");
+        fprintf(stderr, "Erro critico na geracao da carga de processos.\n");
+        return 1;
+    }
+
+    if (!simulation_run(workload, cfg.algorithm, cfg.context_switch_cost, cfg.rr_quantum, &result)) {
+        fprintf(stderr, "Erro critico na simulacao. Verifique algoritmo e parametros.\n");
         return 1;
     }
 
@@ -250,21 +261,15 @@ int main(int argc, char **argv) {
         FILE *file = fopen(cfg.output_path, "w");
         if (file == NULL) {
             perror(cfg.output_path);
+            simulation_result_destroy(&result);
             return 1;
         }
-        write_result(file, &cfg);
+        write_result(file, &cfg, &result);
         fclose(file);
     } else {
-        write_result(stdout, &cfg);
+        write_result(stdout, &cfg, &result);
     }
 
-    if (workload != NULL) {
-        while (!queue_is_empty(workload)) {
-            Process *p = queue_pop(workload);
-            process_destroy(p);
-        }
-        queue_destroy(workload);
-    }
-
+    simulation_result_destroy(&result);
     return 0;
 }
