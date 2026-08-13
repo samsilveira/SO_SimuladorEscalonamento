@@ -19,7 +19,9 @@ Este projeto consiste em um simulador de escalonamento de processos desenvolvido
 ## Tecnologias e Mecanismos
 
 - **Linguagem:** C
-- *Outras tecnologias e mecanismos a definir.*
+- **Build:** GCC e Make
+- **Validação dinâmica:** AddressSanitizer e UndefinedBehaviorSanitizer no build de desenvolvimento
+- **Reprodutibilidade:** PCG32, workload CSV normalizado e SHA-256 implementado no próprio projeto
 
 ## Regras da Simulação
 
@@ -32,9 +34,25 @@ Este projeto consiste em um simulador de escalonamento de processos desenvolvido
 - O simulador calcula `turnaround = conclusão - chegada`, `tempo ideal = ΣCPU + ΣE/S`, `slowdown = turnaround / tempo ideal` e `Jain(%) = (Σslowdown)² / (n × Σslowdown²) × 100`.
 - Tempos e acumuladores usam 64 bits; entrada vazia, denominador zero e operações que excederiam o limite são rejeitados.
 
-## Visualização e Logs
+## Configuração e reprodutibilidade
 
-*A definir.*
+O simulador aplica a precedência:
+
+```text
+padrões internos < arquivo de configuração < argumentos da CLI
+```
+
+Arquivos passados por `--config` usam `chave=valor`, aceitam comentários iniciados por `#` e rejeitam chaves desconhecidas, repetidas ou valores inválidos. O arquivo padrão é [`configs/default.conf`](configs/default.conf). Os intervalos de chegada estão congelados em `arrival_min=0` e `arrival_max=3`.
+
+Uma carga só é persistida quando `--workload-output` é informado. `--workload-input` importa uma carga existente, valida integralmente seu schema e exige que a quantidade de PIDs corresponda a `process_count`. Nenhum `load.csv` é criado implicitamente.
+
+O workload normalizado usa:
+
+```text
+pid,arrival,priority,burst_index,burst_type,duration
+```
+
+Seu SHA-256 é calculado sobre os bytes canônicos e registrado em todo resultado agregado. O round-trip `exportar → importar → exportar` é byte a byte idêntico.
 
 ## Pré-requisitos e Dependências
 
@@ -72,6 +90,42 @@ make compile_commands
 make clean           # remove build, bin e results/raw/
 ```
 
-O JSON de saída inclui `mean_turnaround`, `context_switches`, `jain_slowdown_pct` e o vetor `process_metrics`, com turnaround, tempo ideal e slowdown de cada PID. A validação manual da ISSUE-06 está documentada em [`docs/validacao-issue-06.md`](docs/validacao-issue-06.md).
+Execução com configuração padrão e resultado agregado:
+
+```sh
+./bin/simulador \
+  --config configs/default.conf \
+  --algorithm fcfs \
+  --run-id equilibrado-fcfs-seed-1 \
+  --workload-output results/raw/equilibrado_seed_1_workload.csv \
+  --output results/raw/equilibrado_fcfs_seed_1.csv
+```
+
+Reutilização da mesma carga com outro algoritmo:
+
+```sh
+./bin/simulador \
+  --config configs/default.conf \
+  --algorithm rr \
+  --workload-input results/raw/equilibrado_seed_1_workload.csv \
+  --run-id equilibrado-rr-seed-1 \
+  --output results/raw/equilibrado_rr_seed_1.csv
+```
+
+`--run-id` aceita letras, números, ponto, hífen e sublinhado. Ele é obrigatório quando `--output` ou `--individual-output` é usado. Sem `--output`, o agregado é enviado para a saída padrão com `run_id=adhoc`.
+
+O resultado agregado possui exatamente:
+
+```text
+schema_version,run_id,workload_sha256,algorithm,scenario,seed,process_count,context_switch_cost,rr_quantum,makespan,mean_turnaround,context_switches,jain_slowdown_pct,status
+```
+
+Métricas individuais não são criadas por padrão. Com `--individual-output arquivo.csv`, o schema é:
+
+```text
+run_id,pid,arrival,completion,turnaround,ideal_time,slowdown,priority,total_cpu,total_io,io_requests
+```
+
+Valores `double` usam 17 algarismos significativos. Todas as saídas persistentes da execução são escritas primeiro em temporários nos respectivos diretórios e só são publicadas depois que todas foram escritas, descarregadas e fechadas com sucesso. Uma falha preserva os destinos anteriores e remove os temporários. Caminhos equivalentes por `.`/`..` ou links são rejeitados quando causariam colisão entre entradas e saídas.
 
 `make clean` não remove `docs/`, `artigo/`, `results/consolidated/` nem `results/figures/`.
