@@ -23,11 +23,14 @@ Este projeto consiste em um simulador de escalonamento de processos desenvolvido
 
 ## Regras da Simulação
 
-- O simulador utiliza tempo discreto ou simulação por eventos.
+- O simulador utiliza tempo discreto em ticks inteiros de 64 bits.
 - Cada processo é uma entidade com atributos como tempo de chegada, prioridade, rajadas de CPU e requisições de E/S.
 - Processos em E/S são bloqueados e retornam à fila de prontos após a conclusão.
-- O simulador realiza análises de métricas como *turnaround médio*, *trocas de contexto* e *Índice de Jain do slowdown*.
-- *Outras regras a definir.*
+- Uma troca de contexto só é contada e cobrada na mudança direta entre PIDs diferentes, sem intervalo positivo de ociosidade. Primeiro despacho, saída para ociosidade, despacho após ociosidade e renovação de quantum do único processo apto não contam.
+- O custo padrão é 1 tick. Custo zero exige `--allow-zero-context-switch-cost` e identifica a execução como análise complementar.
+- Durante a troca, chegadas e conclusões de E/S continuam ocorrendo, mas o processo reservado no início da troca não é substituído.
+- O simulador calcula `turnaround = conclusão - chegada`, `tempo ideal = ΣCPU + ΣE/S`, `slowdown = turnaround / tempo ideal` e `Jain(%) = (Σslowdown)² / (n × Σslowdown²) × 100`.
+- Tempos e acumuladores usam 64 bits; entrada vazia, denominador zero e operações que excederiam o limite são rejeitados.
 
 ## Visualização e Logs
 
@@ -68,5 +71,7 @@ make graphs          # prepara diretório de figuras
 make compile_commands
 make clean           # remove build, bin e results/raw/
 ```
+
+O JSON de saída inclui `mean_turnaround`, `context_switches`, `jain_slowdown_pct` e o vetor `process_metrics`, com turnaround, tempo ideal e slowdown de cada PID. A validação manual da ISSUE-06 está documentada em [`docs/validacao-issue-06.md`](docs/validacao-issue-06.md).
 
 `make clean` não remove `docs/`, `artigo/`, `results/consolidated/` nem `results/figures/`.

@@ -3,27 +3,55 @@
 #include "scheduler.h"
 
 #include <limits.h>
+#include <math.h>
+#include <stdint.h>
 #include <stdlib.h>
 
-static int count_queue(ProcessQueue *queue) {
+static int checked_add_i64(int64_t left, int64_t right, int64_t *out) {
+    if (out == NULL
+        || (right > 0 && left > INT64_MAX - right)
+        || (right < 0 && left < INT64_MIN - right)) {
+        return 0;
+    }
+    *out = left + right;
+    return 1;
+}
+
+static int count_queue(ProcessQueue *queue, int *out) {
     int count = 0;
     ProcessNode *node = queue != NULL ? queue->head : NULL;
 
+    if (out == NULL) {
+        return 0;
+    }
     while (node != NULL) {
+        if (count == 100000) {
+            return 0;
+        }
         count += 1;
         node = node->next;
     }
 
-    return count;
+    *out = count;
+    return 1;
 }
 
 static int remember_processes(ProcessQueue *queue, Process ***out, int *count) {
     int i = 0;
     ProcessNode *node = NULL;
 
-    *count = count_queue(queue);
+    if (!count_queue(queue, count)) {
+        return 0;
+    }
+    if ((size_t)*count > SIZE_MAX / sizeof(Process *)) {
+        return 0;
+    }
+    if (*count == 0) {
+        *out = NULL;
+        return 1;
+    }
     *out = (Process **)malloc(sizeof(Process *) * (size_t)*count);
-    if (*out == NULL && *count > 0) {
+    if (*out == NULL) {
         return 0;
     }
 
@@ -37,12 +65,58 @@ static int remember_processes(ProcessQueue *queue, Process ***out, int *count) {
     return 1;
 }
 
-static int record_event(SimulationResult *result, int time, SimulationEventType type, int pid) {
+static int validate_processes(Process **processes, int count) {
+    int i;
+
+    if (processes == NULL || count <= 0 || count > 100000) {
+        return 0;
+    }
+
+    for (i = 0; i < count; i += 1) {
+        Process *process = processes[i];
+        Burst *burst;
+        int64_t cpu_sum = 0;
+        int64_t io_sum = 0;
+
+        if (process == NULL || process->pid <= 0 || process->arrival_time < 0
+            || process->priority < 0 || process->priority > 9
+            || process->state != PROCESS_NEW || process->bursts == NULL
+            || process->current_burst != process->bursts) {
+            return 0;
+        }
+
+        for (burst = process->bursts; burst != NULL; burst = burst->next) {
+            if (burst->cpu_time <= 0 || burst->cpu_time > 1000000
+                || burst->io_time < 0 || burst->io_time > 1000000
+                || (burst->next != NULL && burst->io_time == 0)
+                || (burst->next == NULL && burst->io_time != 0)
+                || !checked_add_i64(cpu_sum, burst->cpu_time, &cpu_sum)
+                || !checked_add_i64(io_sum, burst->io_time, &io_sum)) {
+                return 0;
+            }
+        }
+
+        if (cpu_sum != process->total_cpu_original || io_sum != process->total_io_original
+            || cpu_sum <= 0) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int record_event(SimulationResult *result, int64_t time, SimulationEventType type, int pid) {
     SimulationEvent *events = NULL;
     size_t capacity = 0;
 
     if (result->event_count == result->event_capacity) {
+        if (result->event_capacity > SIZE_MAX / 2) {
+            return 0;
+        }
         capacity = result->event_capacity == 0 ? 32 : result->event_capacity * 2;
+        if (capacity > SIZE_MAX / sizeof(SimulationEvent)) {
+            return 0;
+        }
         events = (SimulationEvent *)realloc(result->events, capacity * sizeof(SimulationEvent));
         if (events == NULL) {
             return 0;
@@ -70,7 +144,7 @@ static int add_ready_now(Process **ready_now, int *ready_count, Process *process
     return 1;
 }
 
-static int collect_io(ProcessQueue *blocked, int time, Process **ready_now, int *ready_count, SimulationResult *result) {
+static int collect_io(ProcessQueue *blocked, int64_t time, Process **ready_now, int *ready_count, SimulationResult *result) {
     while (!queue_is_empty(blocked) && queue_peek(blocked)->io_finish_time <= time) {
         Process *process = queue_pop(blocked);
         process->state = PROCESS_READY;
@@ -85,7 +159,7 @@ static int collect_io(ProcessQueue *blocked, int time, Process **ready_now, int 
     return 1;
 }
 
-static int collect_arrivals(ProcessQueue *future, int time, Process **ready_now, int *ready_count, SimulationResult *result) {
+static int collect_arrivals(ProcessQueue *future, int64_t time, Process **ready_now, int *ready_count, SimulationResult *result) {
     while (!queue_is_empty(future) && queue_peek(future)->arrival_time <= time) {
         Process *process = queue_pop(future);
         process->state = PROCESS_READY;
@@ -112,8 +186,8 @@ static int enqueue_ready_batch(Scheduler *scheduler, Process **ready_now, int re
     return 1;
 }
 
-static int next_external_event(ProcessQueue *future, ProcessQueue *blocked) {
-    int next = INT_MAX;
+static int64_t next_external_event(ProcessQueue *future, ProcessQueue *blocked) {
+    int64_t next = INT64_MAX;
 
     if (!queue_is_empty(future) && queue_peek(future)->arrival_time < next) {
         next = queue_peek(future)->arrival_time;
@@ -125,7 +199,7 @@ static int next_external_event(ProcessQueue *future, ProcessQueue *blocked) {
     return next;
 }
 
-static int dispatch(Process *process, int time, int *quantum_used, SimulationResult *result) {
+static int dispatch(Process *process, int64_t time, int *quantum_used, SimulationResult *result) {
     process->state = PROCESS_RUNNING;
     if (process->remaining_cpu <= 0) {
         process->remaining_cpu = process->current_burst->cpu_time;
@@ -138,19 +212,22 @@ static int dispatch(Process *process, int time, int *quantum_used, SimulationRes
 }
 
 static int start_next(Process *process,
-                      int time,
+                      int64_t time,
                       int context_switch_cost,
                       int last_pid,
                       int idle_since_last,
                       Process **context_target,
-                      int *context_end,
+                      int64_t *context_end,
                       int *quantum_used,
-                      int *context_switches,
+                      uint64_t *context_switches,
                       Process **running,
                       SimulationResult *result) {
     int switches = last_pid > 0 && process->pid != last_pid && !idle_since_last;
 
     if (switches) {
+        if (*context_switches == UINT64_MAX) {
+            return 0;
+        }
         *context_switches += 1;
         if (!record_event(result, time, SIM_EVENT_CONTEXT_SWITCH, process->pid)) {
             return 0;
@@ -159,7 +236,9 @@ static int start_next(Process *process,
 
     if (switches && context_switch_cost > 0) {
         *context_target = process;
-        *context_end = time + context_switch_cost;
+        if (!checked_add_i64(time, (int64_t)context_switch_cost, context_end)) {
+            return 0;
+        }
         return 1;
     }
 
@@ -169,7 +248,7 @@ static int start_next(Process *process,
 
 static int process_cpu_result(Process **running,
                               ProcessQueue *blocked,
-                              int time,
+                              int64_t time,
                               int *finished_count,
                               int *last_pid,
                               int *idle_since_last,
@@ -178,7 +257,7 @@ static int process_cpu_result(Process **running,
                               int quantum_used,
                               SimulationResult *result) {
     Process *process = *running;
-    int io_time;
+    int64_t io_time;
 
     if (process == NULL) {
         return 1;
@@ -196,7 +275,9 @@ static int process_cpu_result(Process **running,
         if (io_time > 0 && process->current_burst->next != NULL) {
             process->current_burst = process->current_burst->next;
             process->state = PROCESS_BLOCKED;
-            process->io_finish_time = time + io_time;
+            if (!checked_add_i64(time, (int64_t)io_time, &process->io_finish_time)) {
+                return 0;
+            }
             if (!record_event(result, time, SIM_EVENT_IO_START, process->pid)) {
                 return 0;
             }
@@ -219,27 +300,84 @@ static int process_cpu_result(Process **running,
     return 1;
 }
 
-static void compute_metrics(Process **processes, int count, SimulationResult *result) {
+static int compute_metrics(Process **processes, int count, SimulationResult *result) {
     int i;
-    double turnaround_sum = 0.0;
-    double slowdown_sum = 0.0;
-    double slowdown_sq_sum = 0.0;
+    long double turnaround_sum = 0.0L;
+    long double slowdown_sum = 0.0L;
+    long double slowdown_sq_sum = 0.0L;
+    double first_slowdown = 0.0;
+    int all_slowdowns_equal = 1;
+
+    if (processes == NULL || count <= 0 || result == NULL
+        || (size_t)count > SIZE_MAX / sizeof(ProcessMetrics)) {
+        return 0;
+    }
+
+    result->process_metrics = (ProcessMetrics *)calloc((size_t)count, sizeof(ProcessMetrics));
+    if (result->process_metrics == NULL) {
+        return 0;
+    }
+    result->process_metrics_count = (size_t)count;
 
     for (i = 0; i < count; i += 1) {
-        double turnaround = (double)(processes[i]->finish_time - processes[i]->arrival_time);
-        double ideal = (double)(processes[i]->total_cpu_original + processes[i]->total_io_original);
-        double slowdown = ideal > 0.0 ? turnaround / ideal : 0.0;
+        Process *process = processes[i];
+        ProcessMetrics *metrics = &result->process_metrics[i];
+        int64_t ideal;
+        int64_t turnaround;
+        double slowdown;
 
-        turnaround_sum += turnaround;
-        slowdown_sum += slowdown;
-        slowdown_sq_sum += slowdown * slowdown;
+        if (process == NULL || process->finish_time < process->arrival_time
+            || !checked_add_i64(process->total_cpu_original, process->total_io_original, &ideal)
+            || ideal <= 0) {
+            return 0;
+        }
+        turnaround = process->finish_time - process->arrival_time;
+        slowdown = (double)turnaround / (double)ideal;
+        if (!isfinite(slowdown) || slowdown < 1.0) {
+            return 0;
+        }
+
+        metrics->pid = process->pid;
+        metrics->arrival = process->arrival_time;
+        metrics->completion = process->finish_time;
+        metrics->turnaround = turnaround;
+        metrics->ideal_time = ideal;
+        metrics->slowdown = slowdown;
+        metrics->total_cpu = process->total_cpu_original;
+        metrics->total_io = process->total_io_original;
+
+        if (i == 0) {
+            first_slowdown = slowdown;
+        } else if (slowdown != first_slowdown) {
+            all_slowdowns_equal = 0;
+        }
+
+        turnaround_sum += (long double)turnaround;
+        slowdown_sum += (long double)slowdown;
+        slowdown_sq_sum += (long double)slowdown * (long double)slowdown;
+        if (!isfinite(turnaround_sum) || !isfinite(slowdown_sum) || !isfinite(slowdown_sq_sum)) {
+            return 0;
+        }
     }
 
     result->process_count = count;
-    result->mean_turnaround = count > 0 ? turnaround_sum / (double)count : 0.0;
-    result->jain_slowdown_pct = slowdown_sq_sum > 0.0
-        ? (slowdown_sum * slowdown_sum) / ((double)count * slowdown_sq_sum) * 100.0
-        : 0.0;
+    result->mean_turnaround = (double)(turnaround_sum / (long double)count);
+    if (!isfinite(result->mean_turnaround) || slowdown_sq_sum <= 0.0L) {
+        return 0;
+    }
+
+    result->jain_slowdown_pct = all_slowdowns_equal
+        ? 100.0
+        : (double)((slowdown_sum * slowdown_sum)
+                   / ((long double)count * slowdown_sq_sum) * 100.0L);
+    if (!isfinite(result->jain_slowdown_pct) || result->jain_slowdown_pct <= 0.0) {
+        return 0;
+    }
+    if (result->jain_slowdown_pct > 100.0) {
+        result->jain_slowdown_pct = 100.0;
+    }
+
+    return 1;
 }
 
 static void destroy_processes(Process **processes, int count) {
@@ -263,22 +401,26 @@ int simulation_run(ProcessQueue *workload,
     Process *running = NULL;
     Process *context_target = NULL;
     Process *preempted = NULL;
-    int context_end = -1;
+    int64_t context_end = -1;
     int quantum_used = 0;
     int finished_count = 0;
     int process_count = 0;
-    int time = 0;
+    int64_t time = 0;
     int last_pid = 0;
     int idle_since_last = 1;
     int ok = 0;
 
-    if (workload == NULL || result == NULL || context_switch_cost < 0 || rr_quantum <= 0) {
+    if (workload == NULL || result == NULL || context_switch_cost < 0
+        || context_switch_cost > 1000000 || rr_quantum <= 0 || rr_quantum > 1000000) {
         return 0;
     }
 
     *result = (SimulationResult){0};
     if (!remember_processes(workload, &processes, &process_count)) {
         return 0;
+    }
+    if (!validate_processes(processes, process_count)) {
+        goto cleanup;
     }
 
     ready_now = (Process **)malloc(sizeof(Process *) * (size_t)process_count);
@@ -290,7 +432,7 @@ int simulation_run(ProcessQueue *workload,
 
     while (finished_count < process_count) {
         int ready_count = 0;
-        int next;
+        int64_t next;
         int dispatched_from_context = 0;
 
         if (context_target != NULL && context_end == time) {
@@ -304,8 +446,9 @@ int simulation_run(ProcessQueue *workload,
         }
 
         if (!dispatched_from_context
-            && !process_cpu_result(&running, blocked, time, &finished_count, &last_pid,
-                                   &idle_since_last, &preempted, scheduler, quantum_used, result)) {
+            && !process_cpu_result(&running, blocked, time, &finished_count,
+                                   &last_pid, &idle_since_last, &preempted,
+                                   scheduler, quantum_used, result)) {
             goto cleanup;
         }
 
@@ -349,7 +492,9 @@ int simulation_run(ProcessQueue *workload,
         if (running != NULL) {
             running->remaining_cpu -= 1;
             quantum_used += 1;
-            time += 1;
+            if (!checked_add_i64(time, 1, &time)) {
+                goto cleanup;
+            }
         } else if (context_target != NULL) {
             next = next_external_event(workload, blocked);
             if (next > time && next < context_end) {
@@ -359,19 +504,25 @@ int simulation_run(ProcessQueue *workload,
             }
         } else {
             next = next_external_event(workload, blocked);
-            if (next == INT_MAX) {
+            if (next == INT64_MAX) {
                 break;
             }
             if (next > time && !record_event(result, time, SIM_EVENT_IDLE, 0)) {
                 goto cleanup;
             }
             idle_since_last = 1;
-            time = next > time ? next : time + 1;
+            if (next > time) {
+                time = next;
+            } else if (!checked_add_i64(time, 1, &time)) {
+                goto cleanup;
+            }
         }
     }
 
     result->makespan = time;
-    compute_metrics(processes, process_count, result);
+    if (!compute_metrics(processes, process_count, result)) {
+        goto cleanup;
+    }
     ok = 1;
 
 cleanup:
@@ -387,13 +538,17 @@ cleanup:
 }
 
 void simulation_result_destroy(SimulationResult *result) {
+    SimulationEvent *events;
+    ProcessMetrics *process_metrics;
+
     if (result == NULL) {
         return;
     }
-    free(result->events);
-    result->events = NULL;
-    result->event_count = 0;
-    result->event_capacity = 0;
+    events = result->events;
+    process_metrics = result->process_metrics;
+    *result = (SimulationResult){0};
+    free(events);
+    free(process_metrics);
 }
 
 const char *simulation_event_name(SimulationEventType type) {

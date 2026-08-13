@@ -4,6 +4,7 @@
 #include "queue.h"
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef enum {
     SIM_EVENT_ARRIVAL,
@@ -18,17 +19,30 @@ typedef enum {
 } SimulationEventType;
 
 typedef struct {
-    int time;
+    int64_t time;
     SimulationEventType type;
     int pid;
 } SimulationEvent;
 
 typedef struct {
-    int makespan;
+    int pid;
+    int64_t arrival;
+    int64_t completion;
+    int64_t turnaround;
+    int64_t ideal_time;
+    double slowdown;
+    int64_t total_cpu;
+    int64_t total_io;
+} ProcessMetrics;
+
+typedef struct {
+    int64_t makespan;
     double mean_turnaround;
-    int context_switches;
+    uint64_t context_switches;
     double jain_slowdown_pct;
     int process_count;
+    ProcessMetrics *process_metrics;
+    size_t process_metrics_count;
     SimulationEvent *events;
     size_t event_count;
     size_t event_capacity;

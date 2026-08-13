@@ -21,6 +21,7 @@ typedef struct {
     int process_count;
     int context_switch_cost;
     int rr_quantum;
+    int allow_zero_context_switch_cost;
     int self_test;
 } Config;
 
@@ -33,6 +34,7 @@ static Config default_config(void) {
         1000,
         1,
         4,
+        0,
         0,
     };
     return cfg;
@@ -99,8 +101,9 @@ static int parse_args(int argc, char **argv, Config *cfg) {
             printf("  --algorithm NOME        Algoritmo de escalonamento (fcfs, rr, prioridade, proprio). Padrao: fcfs\n");
             printf("  --seed N                Semente do gerador pseudoaleatorio (inteiro 64 bits nao negativo). Padrao: 1\n");
             printf("  --processes N           Quantidade de processos a simular (1 a 100000). Padrao: 1000\n");
-            printf("  --context-switch-cost N Custo de troca de contexto em ticks (0 a 1000000). Padrao: 1\n");
+            printf("  --context-switch-cost N Custo de troca de contexto em ticks (1 a 1000000 no experimento principal). Padrao: 1\n");
             printf("  --rr-quantum N          Quantum do algoritmo Round Robin em ticks (1 a 1000000). Padrao: 4\n");
+            printf("  --allow-zero-context-switch-cost  Identifica explicitamente uma analise complementar com custo zero\n");
             printf("\nOutras Opcoes:\n");
             printf("  --output ARQUIVO        Arquivo para salvar o resultado em formato JSON\n");
             printf("  --self-test             Executa os testes internos de validacao dos modulos\n");
@@ -112,6 +115,8 @@ static int parse_args(int argc, char **argv, Config *cfg) {
             return 0;
         } else if (strcmp(argv[i], "--self-test") == 0) {
             cfg->self_test = 1;
+        } else if (strcmp(argv[i], "--allow-zero-context-switch-cost") == 0) {
+            cfg->allow_zero_context_switch_cost = 1;
         } else if (strcmp(argv[i], "--scenario") == 0) {
             if (!next_arg(argc, argv, &i, &cfg->scenario)) return -1;
             if (!workload_is_valid_scenario(cfg->scenario)) {
@@ -152,24 +157,46 @@ static int parse_args(int argc, char **argv, Config *cfg) {
         }
     }
 
+    if (cfg->context_switch_cost == 0 && !cfg->allow_zero_context_switch_cost) {
+        fprintf(stderr, "Erro: custo de troca zero e permitido apenas em analise complementar; use --allow-zero-context-switch-cost para identifica-la.\n");
+        return -1;
+    }
+
     return 1;
 }
 
 static void write_result(FILE *out, const Config *cfg, const SimulationResult *result) {
+    size_t i;
+
     fprintf(out, "{\n");
     fprintf(out, "  \"version\": \"1.0\",\n");
     fprintf(out, "  \"algorithm\": \"%s\",\n", cfg->algorithm);
     fprintf(out, "  \"scenario\": \"%s\",\n", cfg->scenario);
     fprintf(out, "  \"seed\": %" PRIu64 ",\n", cfg->seed);
-    fprintf(out, "  \"quantum\": %d,\n", cfg->rr_quantum);
+    fprintf(out, "  \"rr_quantum\": %d,\n", cfg->rr_quantum);
     fprintf(out, "  \"context_switch_cost\": %d,\n", cfg->context_switch_cost);
-    fprintf(out, "  \"n_processes\": %d,\n", cfg->process_count);
-    fprintf(out, "  \"makespan\": %d,\n", result->makespan);
+    fprintf(out, "  \"experiment_kind\": \"%s\",\n",
+            cfg->context_switch_cost == 0 ? "complementary_zero_context_cost" : "main");
+    fprintf(out, "  \"process_count\": %d,\n", cfg->process_count);
+    fprintf(out, "  \"makespan\": %" PRId64 ",\n", result->makespan);
     fprintf(out, "  \"metrics\": {\n");
-    fprintf(out, "    \"avg_turnaround\": %.17g,\n", result->mean_turnaround);
-    fprintf(out, "    \"total_context_switches\": %d,\n", result->context_switches);
-    fprintf(out, "    \"jain_fairness_pct\": %.17g\n", result->jain_slowdown_pct);
-    fprintf(out, "  }\n");
+    fprintf(out, "    \"mean_turnaround\": %.17g,\n", result->mean_turnaround);
+    fprintf(out, "    \"context_switches\": %" PRIu64 ",\n", result->context_switches);
+    fprintf(out, "    \"jain_slowdown_pct\": %.17g\n", result->jain_slowdown_pct);
+    fprintf(out, "  },\n");
+    fprintf(out, "  \"process_metrics\": [\n");
+    for (i = 0; i < result->process_metrics_count; i += 1) {
+        const ProcessMetrics *metrics = &result->process_metrics[i];
+        fprintf(out,
+                "    {\"pid\": %d, \"arrival\": %" PRId64
+                ", \"completion\": %" PRId64 ", \"turnaround\": %" PRId64
+                ", \"ideal_time\": %" PRId64 ", \"slowdown\": %.17g"
+                ", \"total_cpu\": %" PRId64 ", \"total_io\": %" PRId64 "}%s\n",
+                metrics->pid, metrics->arrival, metrics->completion, metrics->turnaround,
+                metrics->ideal_time, metrics->slowdown, metrics->total_cpu, metrics->total_io,
+                i + 1 < result->process_metrics_count ? "," : "");
+    }
+    fprintf(out, "  ]\n");
     fprintf(out, "}\n");
 }
 

@@ -1,6 +1,7 @@
 #include "workload.h"
 #include "rng.h"
 #include "process.h"
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -146,10 +147,10 @@ int workload_export_csv(ProcessQueue *q, const char *filename) {
         int burst_idx = 1;
         
         while(b) {
-            fprintf(f, "%d,%d,%d,%d,CPU,%d\n", p->pid, p->arrival_time, p->priority, burst_idx++, b->cpu_time);
+            fprintf(f, "%d,%" PRId64 ",%d,%d,CPU,%" PRId64 "\n", p->pid, p->arrival_time, p->priority, burst_idx++, b->cpu_time);
             
             if (b->io_time > 0) {
-                fprintf(f, "%d,%d,%d,%d,IO,%d\n", p->pid, p->arrival_time, p->priority, burst_idx++, b->io_time);
+                fprintf(f, "%d,%" PRId64 ",%d,%d,IO,%" PRId64 "\n", p->pid, p->arrival_time, p->priority, burst_idx++, b->io_time);
             }
             b = b->next;
         }
