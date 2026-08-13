@@ -217,7 +217,8 @@ static int test_individual_and_aggregate_metrics(void) {
     m2 = metrics_for(&result, 2);
     if (m1 == NULL || m2 == NULL || result.process_metrics_count != 2) return 1;
     if (m1->arrival != 0 || m1->completion != 1 || m1->turnaround != 1
-        || m1->ideal_time != 1 || !nearly_equal(m1->slowdown, 1.0)) return 1;
+        || m1->ideal_time != 1 || !nearly_equal(m1->slowdown, 1.0)
+        || m1->priority != 0 || m1->io_requests != 0) return 1;
     if (m2->arrival != 0 || m2->completion != 2 || m2->turnaround != 2
         || m2->ideal_time != 1 || !nearly_equal(m2->slowdown, 2.0)) return 1;
     if (!nearly_equal(result.mean_turnaround, 1.5)) return 1;

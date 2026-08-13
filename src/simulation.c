@@ -325,6 +325,8 @@ static int compute_metrics(Process **processes, int count, SimulationResult *res
         int64_t ideal;
         int64_t turnaround;
         double slowdown;
+        const Burst *burst;
+        int io_requests = 0;
 
         if (process == NULL || process->finish_time < process->arrival_time
             || !checked_add_i64(process->total_cpu_original, process->total_io_original, &ideal)
@@ -343,8 +345,13 @@ static int compute_metrics(Process **processes, int count, SimulationResult *res
         metrics->turnaround = turnaround;
         metrics->ideal_time = ideal;
         metrics->slowdown = slowdown;
+        metrics->priority = process->priority;
         metrics->total_cpu = process->total_cpu_original;
         metrics->total_io = process->total_io_original;
+        for (burst = process->bursts; burst != NULL; burst = burst->next) {
+            if (burst->io_time > 0) io_requests += 1;
+        }
+        metrics->io_requests = io_requests;
 
         if (i == 0) {
             first_slowdown = slowdown;

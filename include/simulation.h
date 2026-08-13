@@ -31,8 +31,10 @@ typedef struct {
     int64_t turnaround;
     int64_t ideal_time;
     double slowdown;
+    int priority;
     int64_t total_cpu;
     int64_t total_io;
+    int io_requests;
 } ProcessMetrics;
 
 typedef struct {
