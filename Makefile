@@ -43,13 +43,17 @@ $(BUILD_DIR)/release/%.o: $(SRC_DIR)/%.c
 
 test: dev
 	./$(TARGET_DEV) --self-test
+	sh tests/test_cli.sh ./$(TARGET_DEV)
 
 simulate: release
-	./$(TARGET_RELEASE) --scenario equilibrado --seed 1 --algorithm fcfs --processes 1000
+	./$(TARGET_RELEASE) --config configs/default.conf --algorithm fcfs
 
 batch: release
 	@mkdir -p results/raw
-	./$(TARGET_RELEASE) --scenario equilibrado --seed 1 --algorithm fcfs --processes 1000 --output results/raw/sample_results.csv
+	./$(TARGET_RELEASE) --config configs/default.conf --algorithm fcfs \
+		--run-id equilibrado-fcfs-seed-1 \
+		--workload-output results/raw/equilibrado_seed_1_workload.csv \
+		--output results/raw/equilibrado_fcfs_seed_1.csv
 
 graphs:
 	@mkdir -p results/figures results/consolidated
