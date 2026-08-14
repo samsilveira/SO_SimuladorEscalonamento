@@ -7,6 +7,16 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum {
+    READY_FROM_ARRIVAL,
+    READY_FROM_IO
+} ReadyCause;
+
+typedef struct {
+    Process *process;
+    ReadyCause cause;
+} ReadyTransition;
+
 static int checked_add_i64(int64_t left, int64_t right, int64_t *out) {
     if (out == NULL
         || (right > 0 && left > INT64_MAX - right)
@@ -132,19 +142,17 @@ static int record_event(SimulationResult *result, int64_t time, SimulationEventT
     return 1;
 }
 
-static int compare_process_pid(const void *a, const void *b) {
-    const Process *pa = *(const Process * const *)a;
-    const Process *pb = *(const Process * const *)b;
-    return (pa->pid > pb->pid) - (pa->pid < pb->pid);
-}
-
-static int add_ready_now(Process **ready_now, int *ready_count, Process *process) {
-    ready_now[*ready_count] = process;
+static int add_ready_now(ReadyTransition *ready_now, int *ready_count,
+                         Process *process, ReadyCause cause) {
+    ready_now[*ready_count].process = process;
+    ready_now[*ready_count].cause = cause;
     *ready_count += 1;
     return 1;
 }
 
-static int collect_io(ProcessQueue *blocked, int64_t time, Process **ready_now, int *ready_count, SimulationResult *result) {
+static int collect_io(ProcessQueue *blocked, int64_t time,
+                      ReadyTransition *ready_now, int *ready_count,
+                      SimulationResult *result) {
     while (!queue_is_empty(blocked) && queue_peek(blocked)->io_finish_time <= time) {
         Process *process = queue_pop(blocked);
         process->state = PROCESS_READY;
@@ -153,13 +161,15 @@ static int collect_io(ProcessQueue *blocked, int64_t time, Process **ready_now, 
         if (!record_event(result, time, SIM_EVENT_IO_END, process->pid)) {
             return 0;
         }
-        add_ready_now(ready_now, ready_count, process);
+        add_ready_now(ready_now, ready_count, process, READY_FROM_IO);
     }
 
     return 1;
 }
 
-static int collect_arrivals(ProcessQueue *future, int64_t time, Process **ready_now, int *ready_count, SimulationResult *result) {
+static int collect_arrivals(ProcessQueue *future, int64_t time,
+                            ReadyTransition *ready_now, int *ready_count,
+                            SimulationResult *result) {
     while (!queue_is_empty(future) && queue_peek(future)->arrival_time <= time) {
         Process *process = queue_pop(future);
         process->state = PROCESS_READY;
@@ -167,18 +177,41 @@ static int collect_arrivals(ProcessQueue *future, int64_t time, Process **ready_
         if (!record_event(result, time, SIM_EVENT_ARRIVAL, process->pid)) {
             return 0;
         }
-        add_ready_now(ready_now, ready_count, process);
+        add_ready_now(ready_now, ready_count, process, READY_FROM_ARRIVAL);
     }
 
     return 1;
 }
 
-static int enqueue_ready_batch(Scheduler *scheduler, Process **ready_now, int ready_count) {
+static int compare_ready_pid(const void *a, const void *b) {
+    const ReadyTransition *left = (const ReadyTransition *)a;
+    const ReadyTransition *right = (const ReadyTransition *)b;
+    return (left->process->pid > right->process->pid)
+        - (left->process->pid < right->process->pid);
+}
+
+static SchedulerProcessView scheduler_view(const Process *process) {
+    SchedulerProcessView view;
+
+    view.pid = process->pid;
+    view.priority = process->priority;
+    view.arrival = process->arrival_time;
+    view.ready_since = process->ready_since;
+    return view;
+}
+
+static int enqueue_ready_batch(Scheduler *scheduler, ReadyTransition *ready_now,
+                               int ready_count) {
     int i;
 
-    qsort(ready_now, (size_t)ready_count, sizeof(Process *), compare_process_pid);
+    qsort(ready_now, (size_t)ready_count, sizeof(ReadyTransition), compare_ready_pid);
     for (i = 0; i < ready_count; i += 1) {
-        if (!scheduler_enqueue(scheduler, ready_now[i])) {
+        SchedulerProcessView view = scheduler_view(ready_now[i].process);
+        int accepted = ready_now[i].cause == READY_FROM_ARRIVAL
+            ? scheduler_on_arrival(scheduler, &view)
+            : scheduler_on_io_complete(scheduler, &view);
+
+        if (!accepted) {
             return 0;
         }
     }
@@ -253,7 +286,7 @@ static int process_cpu_result(Process **running,
                               int *last_pid,
                               int *idle_since_last,
                               Process **preempted,
-                              const Scheduler *scheduler,
+                              Scheduler *scheduler,
                               int quantum_used,
                               SimulationResult *result) {
     Process *process = *running;
@@ -287,7 +320,8 @@ static int process_cpu_result(Process **running,
         process->state = PROCESS_FINISHED;
         process->finish_time = time;
         *finished_count += 1;
-        return record_event(result, time, SIM_EVENT_FINISH, process->pid);
+        return scheduler_on_finish(scheduler, process->pid)
+            && record_event(result, time, SIM_EVENT_FINISH, process->pid);
     }
 
     if (scheduler_should_preempt(scheduler, quantum_used)) {
@@ -396,6 +430,36 @@ static void destroy_processes(Process **processes, int count) {
     free(processes);
 }
 
+static Process **index_processes_by_pid(Process **processes, int count) {
+    Process **by_pid;
+    int i;
+
+    if (processes == NULL || count <= 0
+        || (size_t)(count + 1) > SIZE_MAX / sizeof(Process *)) {
+        return NULL;
+    }
+    by_pid = (Process **)calloc((size_t)count + 1, sizeof(Process *));
+    if (by_pid == NULL) return NULL;
+
+    for (i = 0; i < count; i += 1) {
+        int pid = processes[i]->pid;
+        if (pid < 1 || pid > count || by_pid[pid] != NULL) {
+            free(by_pid);
+            return NULL;
+        }
+        by_pid[pid] = processes[i];
+    }
+    return by_pid;
+}
+
+static Process *selected_process(Process **by_pid, int process_count, int pid) {
+    Process *process;
+
+    if (by_pid == NULL || pid < 1 || pid > process_count) return NULL;
+    process = by_pid[pid];
+    return process != NULL && process->state == PROCESS_READY ? process : NULL;
+}
+
 int simulation_run(ProcessQueue *workload,
                    const char *algorithm,
                    int context_switch_cost,
@@ -404,7 +468,8 @@ int simulation_run(ProcessQueue *workload,
     Scheduler *scheduler = NULL;
     ProcessQueue *blocked = NULL;
     Process **processes = NULL;
-    Process **ready_now = NULL;
+    Process **process_by_pid = NULL;
+    ReadyTransition *ready_now = NULL;
     Process *running = NULL;
     Process *context_target = NULL;
     Process *preempted = NULL;
@@ -429,8 +494,10 @@ int simulation_run(ProcessQueue *workload,
     if (!validate_processes(processes, process_count)) {
         goto cleanup;
     }
+    process_by_pid = index_processes_by_pid(processes, process_count);
+    if (process_by_pid == NULL) goto cleanup;
 
-    ready_now = (Process **)malloc(sizeof(Process *) * (size_t)process_count);
+    ready_now = (ReadyTransition *)malloc(sizeof(ReadyTransition) * (size_t)process_count);
     scheduler = scheduler_create(algorithm, rr_quantum);
     blocked = queue_create(QUEUE_BLOCKED, compare_io_finish);
     if ((ready_now == NULL && process_count > 0) || scheduler == NULL || blocked == NULL) {
@@ -441,6 +508,7 @@ int simulation_run(ProcessQueue *workload,
         int ready_count = 0;
         int64_t next;
         int dispatched_from_context = 0;
+        Process *selected = NULL;
 
         if (context_target != NULL && context_end == time) {
             running = context_target;
@@ -470,15 +538,24 @@ int simulation_run(ProcessQueue *workload,
         }
 
         if (preempted != NULL) {
-            if (queue_is_empty(scheduler->ready)) {
+            int selected_pid = 0;
+            SchedulerSelectResult selection = scheduler_select_next(scheduler, &selected_pid);
+
+            if (selection == SCHEDULER_SELECT_ERROR) goto cleanup;
+            if (selection == SCHEDULER_SELECT_EMPTY) {
                 running = preempted;
                 running->state = PROCESS_RUNNING;
                 quantum_used = 0;
             } else {
+                SchedulerProcessView view;
+
+                selected = selected_process(process_by_pid, process_count, selected_pid);
+                if (selected == NULL) goto cleanup;
                 preempted->state = PROCESS_READY;
                 preempted->ready_since = time;
+                view = scheduler_view(preempted);
                 if (!record_event(result, time, SIM_EVENT_PREEMPT, preempted->pid)
-                    || !scheduler_enqueue(scheduler, preempted)) {
+                    || !scheduler_on_preempted(scheduler, &view)) {
                     goto cleanup;
                 }
             }
@@ -486,7 +563,20 @@ int simulation_run(ProcessQueue *workload,
         }
 
         if (running == NULL && context_target == NULL) {
-            Process *next_process = scheduler_next(scheduler);
+            Process *next_process = selected;
+
+            if (next_process == NULL) {
+                int selected_pid = 0;
+                SchedulerSelectResult selection =
+                    scheduler_select_next(scheduler, &selected_pid);
+
+                if (selection == SCHEDULER_SELECT_ERROR) goto cleanup;
+                if (selection == SCHEDULER_SELECT_OK) {
+                    next_process = selected_process(process_by_pid, process_count,
+                                                    selected_pid);
+                    if (next_process == NULL) goto cleanup;
+                }
+            }
             if (next_process != NULL) {
                 if (!start_next(next_process, time, context_switch_cost, last_pid, idle_since_last,
                                 &context_target, &context_end, &quantum_used, &result->context_switches,
@@ -536,6 +626,7 @@ cleanup:
     queue_destroy(workload);
     queue_destroy(blocked);
     scheduler_destroy(scheduler);
+    free(process_by_pid);
     free(ready_now);
     destroy_processes(processes, process_count);
     if (!ok) {

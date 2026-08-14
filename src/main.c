@@ -12,6 +12,7 @@
 #include "rng.h"
 #include "simulation.h"
 #include "test_process.h"
+#include "test_scheduler.h"
 #include "test_simulation.h"
 #include "test_workload.h"
 #include "workload.h"
@@ -98,6 +99,7 @@ static int run_self_test(void) {
     workload_destroy(workload);
 
     if (process_run_all_tests() != 0) return 1;
+    if (scheduler_run_all_tests() != 0) return 1;
     if (simulation_run_all_tests() != 0) return 1;
     if (workload_run_all_tests() != 0) return 1;
     printf("Todos os self-tests passaram com sucesso!\n");

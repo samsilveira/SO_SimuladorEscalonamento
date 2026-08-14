@@ -1,25 +1,35 @@
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
-#include "queue.h"
+#include <stdint.h>
+
+/*
+ * Visao deliberadamente limitada de um processo pronto. O motor conserva o
+ * Process completo; a politica recebe apenas fatos que ja foram observados.
+ */
+typedef struct {
+    int pid;
+    int priority;
+    int64_t arrival;
+    int64_t ready_since;
+} SchedulerProcessView;
+
+typedef struct Scheduler Scheduler;
 
 typedef enum {
-    SCHEDULER_FCFS,
-    SCHEDULER_RR,
-    SCHEDULER_PRIORITY,
-    SCHEDULER_PROPRIO
-} SchedulerKind;
-
-typedef struct Scheduler {
-    SchedulerKind kind;
-    int quantum;
-    ProcessQueue *ready;
-} Scheduler;
+    SCHEDULER_SELECT_ERROR = -1,
+    SCHEDULER_SELECT_EMPTY = 0,
+    SCHEDULER_SELECT_OK = 1
+} SchedulerSelectResult;
 
 Scheduler *scheduler_create(const char *name, int rr_quantum);
 void scheduler_destroy(Scheduler *scheduler);
-int scheduler_enqueue(Scheduler *scheduler, Process *process);
-Process *scheduler_next(Scheduler *scheduler);
+
+int scheduler_on_arrival(Scheduler *scheduler, const SchedulerProcessView *process);
+int scheduler_on_io_complete(Scheduler *scheduler, const SchedulerProcessView *process);
+int scheduler_on_preempted(Scheduler *scheduler, const SchedulerProcessView *process);
+int scheduler_on_finish(Scheduler *scheduler, int pid);
+SchedulerSelectResult scheduler_select_next(Scheduler *scheduler, int *pid);
 int scheduler_should_preempt(const Scheduler *scheduler, int quantum_used);
 const char *scheduler_name(const Scheduler *scheduler);
 
