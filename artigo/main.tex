@@ -65,6 +65,23 @@ Esta seção descreve o modelo da simulação adotado.
 Esta seção detalha os algoritmos de escalonamento implementados.
 % Também para manter registrado
 \subsection{FCFS}
+O FCFS (\textit{First-Come, First-Served}) foi implementado como uma
+política não preemptiva. A fila de prontos é ordenada pelo par
+$(ready\_since, PID)$: seleciona-se primeiro o processo que está há mais tempo
+continuamente pronto e, quando dois processos ficam prontos no mesmo instante,
+o menor PID determina o desempate. Ao retornar de E/S, o processo recebe um
+novo $ready\_since$ correspondente ao instante da conclusão da operação e volta
+a competir com os demais processos prontos.
+
+A política é consultada apenas quando a CPU está livre. Portanto, uma chegada
+ou conclusão de E/S não interrompe o processo em execução. Para manter a
+comparação reproduzível e impedir conhecimento futuro, o FCFS recebe somente
+uma visão com PID, prioridade estática, chegada já observada e instante atual de
+entrada na fila; a sequência de rajadas, a CPU restante e as chegadas futuras
+permanecem sob responsabilidade exclusiva do motor da simulação. Processos que
+ficam prontos simultaneamente são entregues à interface em ordem crescente de
+PID, tornando o resultado independente da ordem de alocação ou de percurso das
+estruturas internas.
 \subsection{Round Robin}
 \subsection{Prioridade não preemptiva}
 \subsection{Algoritmo proposto}

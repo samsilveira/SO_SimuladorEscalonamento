@@ -183,6 +183,50 @@ static int test_context_switch_cost_and_cpu_unavailability(void) {
     return 0;
 }
 
+static int test_process_blocks_when_another_arrives(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    Process *p1 = make_process(1, 0, 0);
+    Process *p2 = make_process(2, 1, 0);
+
+    if (workload == NULL) return 1;
+    if (!process_add_burst(p1, 1, 3) || !process_add_burst(p1, 1, 0)
+        || !process_add_burst(p2, 2, 0)) return 1;
+    if (!add_process(workload, p1) || !add_process(workload, p2)) return 1;
+    if (!simulation_run(workload, "fcfs", 0, 4, &result)) return 1;
+
+    if (!has_event(&result, 1, SIM_EVENT_IO_START, 1)
+        || !has_event(&result, 1, SIM_EVENT_ARRIVAL, 2)
+        || !has_event(&result, 1, SIM_EVENT_DISPATCH, 2)
+        || !has_event(&result, 4, SIM_EVENT_IO_END, 1)
+        || !has_event(&result, 5, SIM_EVENT_FINISH, 1)) return 1;
+
+    simulation_result_destroy(&result);
+    return 0;
+}
+
+static int test_io_return_does_not_preempt_fcfs(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    Process *p1 = make_process(1, 0, 0);
+    Process *p2 = make_process(2, 0, 0);
+
+    if (workload == NULL) return 1;
+    if (!process_add_burst(p1, 1, 2) || !process_add_burst(p1, 1, 0)
+        || !process_add_burst(p2, 5, 0)) return 1;
+    if (!add_process(workload, p1) || !add_process(workload, p2)) return 1;
+    if (!simulation_run(workload, "fcfs", 0, 4, &result)) return 1;
+
+    if (!has_event(&result, 3, SIM_EVENT_IO_END, 1)
+        || has_event(&result, 3, SIM_EVENT_PREEMPT, 2)
+        || !has_event(&result, 6, SIM_EVENT_FINISH, 2)
+        || !has_event(&result, 6, SIM_EVENT_DISPATCH, 1)
+        || !has_event(&result, 7, SIM_EVENT_FINISH, 1)) return 1;
+
+    simulation_result_destroy(&result);
+    return 0;
+}
+
 static int test_rr_single_process_renews_without_switch(void) {
     ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
     SimulationResult result = {0};
@@ -295,6 +339,14 @@ int simulation_run_all_tests(void) {
     }
     if (test_context_switch_cost_and_cpu_unavailability()) {
         fprintf(stderr, "test_context_switch_cost_and_cpu_unavailability failed\n");
+        return 1;
+    }
+    if (test_process_blocks_when_another_arrives()) {
+        fprintf(stderr, "test_process_blocks_when_another_arrives failed\n");
+        return 1;
+    }
+    if (test_io_return_does_not_preempt_fcfs()) {
+        fprintf(stderr, "test_io_return_does_not_preempt_fcfs failed\n");
         return 1;
     }
     if (test_rr_single_process_renews_without_switch()) {
