@@ -78,13 +78,20 @@ ProcessQueue* workload_generate(int process_count, const char *scenario, uint64_
         int i;
         Process *p;
 
+        // Etapa 2: Lógica de chegada distribuída (evita t=0 para todos)
         if (pid > 1) arrival += rng_next_range(0, 3);
+        
+        // Etapa 2: Distribuição de Prioridades (70% Alta / 30% Baixa)
         if (scenario_id == 4) {
-            priority = rng_next_range(0, 99) < 80
-                ? rng_next_range(0, 2) : rng_next_range(7, 9);
+            // Alta prioridade mapeada para [0, 2] e Baixa para [7, 9] (considerando range total 0-9)
+            priority = (rng_next_range(0, 99) < 70) 
+                ? rng_next_range(0, 2) 
+                : rng_next_range(7, 9);
         } else {
+            // Outros cenários: Prioridade Uniforme [0, 9] (representando 1 a 10)
             priority = rng_next_range(0, 9);
         }
+        
         if (scenario_id == 1 || scenario_id == 4) {
             is_pouca_es = rng_next_range(0, 1);
         }

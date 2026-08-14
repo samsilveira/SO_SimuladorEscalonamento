@@ -530,6 +530,17 @@ int simulation_run(ProcessQueue *workload,
     if (!compute_metrics(processes, process_count, result)) {
         goto cleanup;
     }
+
+    result->global_total_cpu = 0;
+    result->global_total_io = 0;
+    
+    if (result->process_metrics != NULL) {
+        for (size_t i = 0; i < result->process_metrics_count; i++) {
+            result->global_total_cpu += result->process_metrics[i].total_cpu;
+            result->global_total_io += result->process_metrics[i].total_io;
+        }
+    }
+
     ok = 1;
 
 cleanup:
