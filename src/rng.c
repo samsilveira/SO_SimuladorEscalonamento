@@ -29,11 +29,7 @@ uint32_t rng_next_range(uint32_t min, uint32_t max) {
         max = temp;
     }
     
-    uint32_t range = max - min + 1;
+    uint64_t range = (uint64_t)max - (uint64_t)min + 1ULL;
     
-    if (range == 0) {
-        return rng_next(); 
-    }
-    
-    return min + (rng_next() % range);
+    return min + (uint32_t)(rng_next() % range);
 }

@@ -1,7 +1,9 @@
 #include "process.h"
+
+#include <stdint.h>
 #include <stdlib.h>
 
-Process* process_create(int pid, int arrival_time, int priority) {
+Process* process_create(int pid, int64_t arrival_time, int priority) {
     if (pid <= 0 || arrival_time < 0 || priority < 0 || priority > 9) {
         return NULL; // Invalid process data
     }
@@ -37,8 +39,13 @@ void process_destroy(Process *p) {
     free(p);
 }
 
-bool process_add_burst(Process *p, int cpu_time, int io_time) {
-    if (!p || cpu_time <= 0 || io_time < 0) {
+bool process_add_burst(Process *p, int64_t cpu_time, int64_t io_time) {
+    if (!p || cpu_time <= 0 || cpu_time > 1000000 || io_time < 0 || io_time > 1000000) {
+        return false;
+    }
+
+    if (p->total_cpu_original > INT64_MAX - cpu_time
+        || p->total_io_original > INT64_MAX - io_time) {
         return false;
     }
     

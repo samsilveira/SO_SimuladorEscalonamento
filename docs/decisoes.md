@@ -308,6 +308,8 @@ Todos os arquivos textuais usam UTF-8, fim de linha `LF`, cabeçalho quando tabu
 
 Arquivos em `configs/` usam uma linha `chave=valor`, comentários iniciados por `#` e nomes de chave em `snake_case`. Argumentos da CLI podem sobrescrever valores; os valores efetivos sempre são gravados na saída.
 
+A precedência é obrigatoriamente `padrões internos < arquivo indicado por --config < argumentos da CLI`, independentemente da posição de `--config` na linha de comando. Chaves desconhecidas ou duplicadas e valores inválidos fazem a execução falhar antes da geração ou importação da carga. `algorithm` também pode ser informado no arquivo. Como D05 congela o modelo de chegada, `arrival_min` e `arrival_max` aceitam somente `0` e `3`.
+
 Campos mínimos:
 
 ```text
@@ -330,6 +332,10 @@ pid,arrival,priority,burst_index,burst_type,duration
 ```
 
 `burst_type` aceita apenas `CPU` ou `IO`. O SHA-256 do arquivo identifica a carga usada por todos os algoritmos.
+
+A representação normalizada usa cabeçalho exato, linhas em ordem crescente de PID, `burst_index` sequencial por operação, alternância iniciada e encerrada em `CPU`, inteiros decimais sem espaços e fim de linha `LF`. O hash é calculado sobre esses bytes normalizados, mesmo quando o arquivo não é persistido. Importar e exportar novamente uma carga normalizada deve produzir bytes idênticos.
+
+`--workload-input` substitui a geração aleatória e `--workload-output` é a única forma de persistir a carga; nenhum `load.csv` é criado implicitamente. Cenário e seed permanecem metadados efetivos da execução, pois não fazem parte do CSV. A quantidade importada deve ser igual a `process_count`.
 
 ### 10.3 Log de eventos
 
@@ -357,6 +363,10 @@ Quando solicitadas, métricas individuais usam:
 run_id,pid,arrival,completion,turnaround,ideal_time,slowdown,
 priority,total_cpu,total_io,io_requests
 ```
+
+`run_id` usa apenas letras ASCII, algarismos, ponto, hífen e sublinhado. Ele é informado por `--run-id` e é obrigatório quando o resultado agregado ou individual é persistido. A saída padrão de uma execução ad hoc usa `run_id=adhoc`. Um resultado publicado após execução concluída usa `status=success`; falhas não produzem uma linha com estado de sucesso.
+
+Métricas individuais só são persistidas mediante `--individual-output`. Todas as saídas persistentes pedidas por uma execução (workload, métricas individuais e agregado) são preparadas antes da publicação. Cada arquivo usa um temporário no mesmo diretório; a substituição dos destinos só começa após escrita, `flush` e fechamento bem-sucedidos de todos eles. Se alguma substituição falhar, os destinos anteriores são restaurados e nenhum arquivo novo da execução permanece publicado. Caminhos equivalentes, inclusive por normalização (`.` e `..`) ou links, são rejeitados quando fariam uma entrada ser sobrescrita ou duas saídas usarem o mesmo arquivo.
 
 Definições obrigatórias:
 

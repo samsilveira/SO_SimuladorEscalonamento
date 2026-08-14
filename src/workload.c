@@ -101,8 +101,6 @@ ProcessQueue* workload_generate(int process_count, const char *scenario, uint64_
             workload_destroy(q);
             return NULL;
         }
-        
-        // Aplicação das faixas exatas de burst contínuo para CPU e I/O
         for (i = 0; i < num_bursts; i += 1) {
             int cpu;
             int io = 0;

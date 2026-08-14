@@ -1,231 +1,260 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <errno.h>
 #include <inttypes.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
+#include "config.h"
+#include "io_utils.h"
+#include "process.h"
+#include "rng.h"
+#include "simulation.h"
 #include "test_process.h"
+#include "test_simulation.h"
+#include "test_workload.h"
 #include "workload.h"
 
-#define SIMULADOR_VERSION "1.0.0"
+typedef struct {
+    const Config *config;
+    const SimulationResult *result;
+    const char *workload_hash;
+} ResultWriteContext;
 
 typedef struct {
-    const char *scenario;
-    const char *algorithm;
-    const char *output_path;
-    uint64_t seed;
-    int process_count;
-    int context_switch_cost;
-    int rr_quantum;
-    int self_test;
-} Config;
+    const char *bytes;
+    size_t length;
+} BufferWriteContext;
 
-static Config default_config(void) {
-    Config cfg = {
-        "equilibrado",
-        "fcfs",
-        NULL,
-        1,
-        1000,
-        1,
-        4,
-        0,
-    };
-    return cfg;
+static int write_buffer(FILE *file, void *opaque) {
+    const BufferWriteContext *context = (const BufferWriteContext *)opaque;
+
+    return fwrite(context->bytes, 1, context->length, file) == context->length;
 }
 
-static int parse_u64(const char *text, uint64_t *out) {
-    char *end = NULL;
-    unsigned long long value;
+static int write_aggregate_csv(FILE *file, void *opaque) {
+    const ResultWriteContext *context = (const ResultWriteContext *)opaque;
+    const Config *cfg = context->config;
+    const SimulationResult *result = context->result;
 
-    if (text == NULL || *text == '\0') {
+    if (fprintf(file,
+                "schema_version,run_id,workload_sha256,algorithm,scenario,seed,"
+                "process_count,context_switch_cost,rr_quantum,makespan,"
+                "mean_turnaround,context_switches,jain_slowdown_pct,status\n") < 0) {
         return 0;
     }
-    while (*text == ' ' || *text == '\t') {
-        text++;
-    }
-    if (*text == '-') {
-        return 0; 
-    }
+    return fprintf(file,
+                   "%d,%s,%s,%s,%s,%" PRIu64 ",%d,%d,%d,%" PRId64
+                   ",%.17g,%" PRIu64 ",%.17g,success\n",
+                   cfg->schema_version, cfg->run_id, context->workload_hash,
+                   cfg->algorithm, cfg->scenario, cfg->seed, result->process_count,
+                   cfg->context_switch_cost, cfg->rr_quantum, result->makespan,
+                   result->mean_turnaround, result->context_switches,
+                   result->jain_slowdown_pct) >= 0;
+}
 
-    errno = 0;
-    value = strtoull(text, &end, 10);
-    if (errno != 0 || end == text || *end != '\0') {
+static int write_individual_csv(FILE *file, void *opaque) {
+    const ResultWriteContext *context = (const ResultWriteContext *)opaque;
+    const SimulationResult *result = context->result;
+    size_t i;
+
+    if (fprintf(file,
+                "run_id,pid,arrival,completion,turnaround,ideal_time,slowdown,"
+                "priority,total_cpu,total_io,io_requests\n") < 0) {
         return 0;
     }
-
-    *out = (uint64_t)value;
-    return 1;
-}
-
-static int parse_int_in_range(const char *text, int *out, int min, int max) {
-    char *end = NULL;
-    long value;
-
-    errno = 0;
-    value = strtol(text, &end, 10);
-    if (errno != 0 || end == text || *end != '\0' || value < min || value > max) {
-        return 0; 
-    }
-
-    *out = (int)value;
-    return 1;
-}
-
-static int next_arg(int argc, char **argv, int *index, const char **value) {
-    if (*index + 1 >= argc) {
-        fprintf(stderr, "Erro: argumento sem valor para a opcao %s\n", argv[*index]);
-        return 0;
-    }
-    *index += 1;
-    *value = argv[*index];
-    return 1;
-}
-
-static int parse_args(int argc, char **argv, Config *cfg) {
-    int i;
-
-    for (i = 1; i < argc; i += 1) {
-        const char *value = NULL;
-
-        if (strcmp(argv[i], "--help") == 0) {
-            printf("Uso: %s [opcoes]\n", argv[0]);
-            printf("\nOpcoes de Simulacao:\n");
-            printf("  --scenario NOME         Cenario de simulacao (equilibrado, io_bound, cpu_bound, prioridades_desbalanceadas). Padrao: equilibrado\n");
-            printf("  --algorithm NOME        Algoritmo de escalonamento (fcfs, rr, prioridade, proprio). Padrao: fcfs\n");
-            printf("  --seed N                Semente do gerador pseudoaleatorio (inteiro 64 bits nao negativo). Padrao: 1\n");
-            printf("  --processes N           Quantidade de processos a simular (1 a 100000). Padrao: 1000\n");
-            printf("  --context-switch-cost N Custo de troca de contexto em ticks (0 a 1000000). Padrao: 1\n");
-            printf("  --rr-quantum N          Quantum do algoritmo Round Robin em ticks (1 a 1000000). Padrao: 4\n");
-            printf("\nOutras Opcoes:\n");
-            printf("  --output ARQUIVO        Arquivo para salvar o resultado em formato JSON\n");
-            printf("  --self-test             Executa os testes internos de validacao dos modulos\n");
-            printf("  --version               Exibe a versao do simulador\n");
-            printf("  --help                  Exibe esta mensagem de ajuda detalhada\n");
+    for (i = 0; i < result->process_metrics_count; i += 1) {
+        const ProcessMetrics *metrics = &result->process_metrics[i];
+        if (fprintf(file,
+                    "%s,%d,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64
+                    ",%.17g,%d,%" PRId64 ",%" PRId64 ",%d\n",
+                    context->config->run_id, metrics->pid, metrics->arrival,
+                    metrics->completion, metrics->turnaround, metrics->ideal_time,
+                    metrics->slowdown, metrics->priority, metrics->total_cpu,
+                    metrics->total_io, metrics->io_requests) < 0) {
             return 0;
-        } else if (strcmp(argv[i], "--version") == 0) {
-            printf("Versao: %s\n", SIMULADOR_VERSION);
-            return 0;
-        } else if (strcmp(argv[i], "--self-test") == 0) {
-            cfg->self_test = 1;
-        } else if (strcmp(argv[i], "--scenario") == 0) {
-            if (!next_arg(argc, argv, &i, &cfg->scenario)) return -1;
-        } else if (strcmp(argv[i], "--algorithm") == 0) {
-            if (!next_arg(argc, argv, &i, &cfg->algorithm)) return -1;
-        } else if (strcmp(argv[i], "--output") == 0) {
-            if (!next_arg(argc, argv, &i, &cfg->output_path)) return -1;
-        } else if (strcmp(argv[i], "--seed") == 0) {
-            if (!next_arg(argc, argv, &i, &value) || !parse_u64(value, &cfg->seed)) {
-                fprintf(stderr, "Erro: Semente invalida. Deve ser um inteiro positivo (64-bits).\n");
-                return -1;
-            }
-        } else if (strcmp(argv[i], "--processes") == 0) {
-            if (!next_arg(argc, argv, &i, &value) || !parse_int_in_range(value, &cfg->process_count, 1, 100000)) {
-                fprintf(stderr, "Erro: Quantidade de processos invalida. Permitido: 1 a 100000.\n");
-                return -1;
-            }
-        } else if (strcmp(argv[i], "--context-switch-cost") == 0) {
-            if (!next_arg(argc, argv, &i, &value) || !parse_int_in_range(value, &cfg->context_switch_cost, 0, 1000000)) {
-                fprintf(stderr, "Erro: Custo de troca de contexto invalido. Permitido: 0 a 1000000.\n");
-                return -1;
-            }
-        } else if (strcmp(argv[i], "--rr-quantum") == 0) {
-            if (!next_arg(argc, argv, &i, &value) || !parse_int_in_range(value, &cfg->rr_quantum, 1, 1000000)) {
-                fprintf(stderr, "Erro: Quantum invalido. Permitido: 1 a 1000000.\n");
-                return -1;
-            }
-        } else {
-            fprintf(stderr, "Erro: Argumento desconhecido: %s\n", argv[i]);
-            return -1;
         }
     }
-
     return 1;
-}
-
-static void write_result(FILE *out, const Config *cfg) {
-    fprintf(out, "{\n");
-    fprintf(out, "  \"version\": \"1.0\",\n");
-    fprintf(out, "  \"algorithm\": \"%s\",\n", cfg->algorithm);
-    fprintf(out, "  \"scenario\": \"%s\",\n", cfg->scenario);
-    fprintf(out, "  \"seed\": %" PRIu64 ",\n", cfg->seed);
-    fprintf(out, "  \"quantum\": %d,\n", cfg->rr_quantum);
-    fprintf(out, "  \"context_switch_cost\": %d,\n", cfg->context_switch_cost);
-    fprintf(out, "  \"n_processes\": %d,\n", cfg->process_count);
-    fprintf(out, "  \"metrics\": {\n");
-    fprintf(out, "    \"avg_turnaround\": 0,\n");
-    fprintf(out, "    \"total_context_switches\": 0,\n");
-    fprintf(out, "    \"jain_fairness_pct\": 0\n");
-    fprintf(out, "  }\n");
-    fprintf(out, "}\n");
 }
 
 static int run_self_test(void) {
-    uint64_t seed = 0;
-    int value = 0;
-    Config cfg = default_config();
+    uint32_t first;
+    uint32_t second;
+    ProcessQueue *workload;
 
-    if (!parse_u64("42", &seed) || seed != 42) return 1;
-    if (parse_u64("42x", &seed)) return 1;
-    if (parse_u64("-1", &seed)) return 1;
-    
-    if (!parse_int_in_range("1000", &value, 1, 100000) || value != 1000) return 1;
-    if (parse_int_in_range("0", &value, 1, 100000)) return 1; 
-    if (parse_int_in_range("100001", &value, 1, 100000)) return 1; 
-    if (parse_int_in_range("-1", &value, 0, 1000000)) return 1; 
-
-    if (cfg.process_count != 1000) return 1;
-    if (cfg.context_switch_cost != 1) return 1;
-    if (cfg.rr_quantum != 4) return 1;
+    rng_init(42, 1);
+    first = rng_next();
+    second = rng_next();
+    rng_init(42, 1);
+    if (rng_next() != first || rng_next() != second) return 1;
+    if (workload_generate(10, "invalido", 42) != NULL) return 1;
+    workload = workload_generate(10, "equilibrado", 42);
+    if (workload == NULL || workload_process_count(workload) != 10) {
+        workload_destroy(workload);
+        return 1;
+    }
+    workload_destroy(workload);
 
     if (process_run_all_tests() != 0) return 1;
-
+    if (simulation_run_all_tests() != 0) return 1;
+    if (workload_run_all_tests() != 0) return 1;
     printf("Todos os self-tests passaram com sucesso!\n");
     return 0;
 }
 
+static int report_output_error(const char *kind, const char *path) {
+    fprintf(stderr, "Erro ao escrever %s '%s': %s\n", kind, path, strerror(errno));
+    return 1;
+}
+
 int main(int argc, char **argv) {
-    Config cfg = default_config();
-    int parsed = parse_args(argc, argv, &cfg);
+    Config cfg;
+    SimulationResult result = {0};
+    ProcessQueue *workload = NULL;
+    ResultWriteContext write_context;
+    AtomicWriteRequest output_requests[3];
+    size_t output_request_count = 0;
+    char *workload_csv = NULL;
+    size_t workload_csv_size = 0;
+    BufferWriteContext workload_write_context;
+    char workload_hash[65];
+    char import_error[256];
+    int actual_process_count = 0;
+    int parsed;
 
-    if (parsed <= 0) {
-        return parsed == 0 ? 0 : 2;
-    }
+    config_set_defaults(&cfg);
+    parsed = config_parse(argc, argv, &cfg);
+    if (parsed <= 0) return parsed == 0 ? 0 : 2;
+    if (cfg.self_test) return run_self_test();
 
-    if (cfg.self_test) {
-        return run_self_test();
-    }
-
-    ProcessQueue *workload = workload_generate(cfg.process_count, cfg.scenario, cfg.seed);
-    if (workload != NULL) {
-        if (!workload_export_csv(workload, "load.csv")) {
-            fprintf(stderr, "Erro ao tentar salvar o arquivo load.csv\n");
+    if (cfg.workload_input_path != NULL) {
+        workload = workload_import_csv(cfg.workload_input_path, &actual_process_count,
+                                       import_error, sizeof(import_error));
+        if (workload == NULL) {
+            fprintf(stderr, "Erro ao importar workload: %s\n", import_error);
+            return 1;
+        }
+        if (actual_process_count != cfg.process_count) {
+            fprintf(stderr,
+                    "Erro: workload possui %d processos, mas a configuracao efetiva exige %d\n",
+                    actual_process_count, cfg.process_count);
+            workload_destroy(workload);
+            return 1;
         }
     } else {
-        fprintf(stderr, "Erro crítico na geração da carga de processos.\n");
+        workload = workload_generate(cfg.process_count, cfg.scenario, cfg.seed);
+        actual_process_count = cfg.process_count;
+        if (workload == NULL) {
+            fprintf(stderr, "Erro critico na geracao da carga de processos\n");
+            return 1;
+        }
+    }
+
+    if (!workload_sha256(workload, workload_hash)) {
+        fprintf(stderr, "Erro ao calcular SHA-256 do workload normalizado\n");
+        workload_destroy(workload);
+        return 1;
+    }
+    if (cfg.workload_output_path != NULL) {
+        FILE *stream = open_memstream(&workload_csv, &workload_csv_size);
+        int stream_ok = 0;
+
+        if (stream != NULL) {
+            int saved_errno = 0;
+
+            if (!workload_write_csv(stream, workload)
+                || fflush(stream) != 0 || ferror(stream)) {
+                saved_errno = errno != 0 ? errno : EIO;
+            }
+            if (fclose(stream) != 0 && saved_errno == 0) saved_errno = errno;
+            stream = NULL;
+            if (saved_errno == 0) {
+                stream_ok = 1;
+            } else {
+                errno = saved_errno;
+            }
+        }
+        if (!stream_ok) {
+            int saved_errno = errno;
+            if (stream != NULL) fclose(stream);
+            free(workload_csv);
+            workload_destroy(workload);
+            errno = saved_errno != 0 ? saved_errno : EIO;
+            return report_output_error("workload", cfg.workload_output_path);
+        }
+    }
+
+    if (!simulation_run(workload, cfg.algorithm, cfg.context_switch_cost,
+                        cfg.rr_quantum, &result)) {
+        fprintf(stderr, "Erro critico na simulacao. Verifique algoritmo e parametros\n");
+        free(workload_csv);
+        return 1;
+    }
+    if (result.process_count != actual_process_count) {
+        fprintf(stderr, "Erro interno: quantidade simulada diverge do workload\n");
+        free(workload_csv);
+        simulation_result_destroy(&result);
         return 1;
     }
 
+    write_context.config = &cfg;
+    write_context.result = &result;
+    write_context.workload_hash = workload_hash;
+
+    if (cfg.workload_output_path != NULL) {
+        workload_write_context = (BufferWriteContext){workload_csv, workload_csv_size};
+        output_requests[output_request_count++] = (AtomicWriteRequest){
+            cfg.workload_output_path, write_buffer, &workload_write_context
+        };
+    }
+
+    if (cfg.individual_output_path != NULL) {
+        output_requests[output_request_count++] = (AtomicWriteRequest){
+            cfg.individual_output_path, write_individual_csv, &write_context
+        };
+    }
     if (cfg.output_path != NULL) {
-        FILE *file = fopen(cfg.output_path, "w");
-        if (file == NULL) {
-            perror(cfg.output_path);
-            return 1;
+        output_requests[output_request_count++] = (AtomicWriteRequest){
+            cfg.output_path, write_aggregate_csv, &write_context
+        };
+    }
+    if (output_request_count > 0
+        && !atomic_write_files(output_requests, output_request_count)) {
+        if (output_request_count == 1) {
+            const char *kind;
+            const char *path;
+
+            if (cfg.workload_output_path != NULL) {
+                kind = "workload";
+                path = cfg.workload_output_path;
+            } else if (cfg.individual_output_path != NULL) {
+                kind = "metricas individuais";
+                path = cfg.individual_output_path;
+            } else {
+                kind = "resultado agregado";
+                path = cfg.output_path;
+            }
+            simulation_result_destroy(&result);
+            free(workload_csv);
+            return report_output_error(kind, path);
         }
-        write_result(file, &cfg);
-        fclose(file);
-    } else {
-        write_result(stdout, &cfg);
+        fprintf(stderr, "Erro ao publicar as saidas da execucao: %s\n", strerror(errno));
+        simulation_result_destroy(&result);
+        free(workload_csv);
+        return 1;
+    }
+    if (cfg.output_path == NULL
+        && (!write_aggregate_csv(stdout, &write_context)
+            || fflush(stdout) != 0 || ferror(stdout))) {
+        fprintf(stderr, "Erro ao escrever resultado agregado na saida padrao\n");
+        simulation_result_destroy(&result);
+        free(workload_csv);
+        return 1;
     }
 
-    if (workload != NULL) {
-        while (!queue_is_empty(workload)) {
-            Process *p = queue_pop(workload);
-            process_destroy(p);
-        }
-        queue_destroy(workload);
-    }
-
+    simulation_result_destroy(&result);
+    free(workload_csv);
     return 0;
 }
