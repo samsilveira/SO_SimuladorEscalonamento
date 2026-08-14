@@ -71,7 +71,8 @@ static int test_workload_round_trip_and_hash(void) {
 
     snprintf(first_path, sizeof(first_path), "/tmp/simulador-workload-%ld-a.csv", (long)getpid());
     snprintf(second_path, sizeof(second_path), "/tmp/simulador-workload-%ld-b.csv", (long)getpid());
-    generated = workload_generate(4, "equilibrado", 42);
+    
+    generated = workload_generate(1000, "equilibrado", 42);
     if (generated == NULL
         || !workload_sha256(generated, first_hash)
         || !workload_export_csv(generated, first_path)) goto cleanup;
@@ -79,7 +80,8 @@ static int test_workload_round_trip_and_hash(void) {
     generated = NULL;
 
     imported = workload_import_csv(first_path, &imported_count, error, sizeof(error));
-    if (imported == NULL || imported_count != 4
+    
+    if (imported == NULL || imported_count != 1000
         || !workload_sha256(imported, second_hash)
         || !workload_export_csv(imported, second_path)
         || strcmp(first_hash, second_hash) != 0
