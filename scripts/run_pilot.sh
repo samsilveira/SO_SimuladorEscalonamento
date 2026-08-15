@@ -1,23 +1,24 @@
 #!/bin/bash
 
-# Etapa 4: Script para rodar os 4 arquivos de configuração e validar o piloto
+# Script para rodar os 4 arquivos de configuração e validar o piloto
+make clean && make
+
 mkdir -p results/raw
 mkdir -p results/consolidated
 mkdir -p scripts
 
 echo "Compilando o simulador..."
-make clean && make
 
 CENARIOS=("equilibrado" "io_bound" "cpu_bound" "desbalanceado")
 
-# Inicializa o arquivo consolidado de métricas (Etapa 3 / Etapa 4)
-echo "scenario,total_cpu,total_io,razao" > results/consolidated/metricas_piloto.csv
+# Inicializa o arquivo consolidado de métricas
+echo "scenario,total_cpu,total_io,ratio_io_cpu,ratio_cpu_io" > results/consolidated/metricas_piloto.csv  
 
 for cenario in "${CENARIOS[@]}"; do
     echo "----------------------------------------"
     echo "[*] Executando cenário: $cenario"
     
-    # Executar o simulador usando a configuração da Etapa 1
+    # Executar o simulador
     ./bin/simulador \
         --config configs/${cenario}.conf \
         --algorithm fcfs \
@@ -25,7 +26,7 @@ for cenario in "${CENARIOS[@]}"; do
         --individual-output results/raw/pilot_${cenario}_indiv.csv \
         > results/raw/pilot_${cenario}_agg.csv
 
-    # Analisar a saída estruturada CSV e gerar validação matemática
+    # Analisar a saída estruturada CSV
     awk -v cen="$cenario" -F',' '
     NR>1 {
         sum_cpu += $9;   # Coluna total_cpu baseada no schema do README
@@ -61,8 +62,7 @@ for cenario in "${CENARIOS[@]}"; do
             if (pct_baixa > 25 && pct_baixa < 35) print "   [PASSOU] Proporção Baixa ~30%"
         }
         
-        # Exporta CSV estruturado de validação
-        printf "%s,%d,%d,%.2f\n", cen, sum_cpu, sum_io, ratio_io_cpu >> "results/consolidated/metricas_piloto.csv"
+        printf "%s,%d,%d,%.2f,%.2f\n", cen, sum_cpu, sum_io, ratio_io_cpu, ratio_cpu_io >> "results/consolidated/metricas_piloto.csv"
     }' results/raw/pilot_${cenario}_indiv.csv
 done
 
