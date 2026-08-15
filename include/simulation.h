@@ -48,6 +48,8 @@ typedef struct {
     SimulationEvent *events;
     size_t event_count;
     size_t event_capacity;
+    int64_t global_total_cpu;
+    int64_t global_total_io;
 } SimulationResult;
 
 int simulation_run(ProcessQueue *workload,

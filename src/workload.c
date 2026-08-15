@@ -74,21 +74,26 @@ ProcessQueue* workload_generate(int process_count, const char *scenario, uint64_
     for (pid = 1; pid <= process_count; pid += 1) {
         int priority;
         int is_pouca_es = 0;
-        int is_curto_cpu = 0;
         int num_bursts;
         int i;
         Process *p;
 
+        // Etapa 2: Lógica de chegada distribuída (evita t=0 para todos)
         if (pid > 1) arrival += rng_next_range(0, 3);
+        
+        // Etapa 2: Distribuição de Prioridades (70% Alta / 30% Baixa)
         if (scenario_id == 4) {
-            priority = rng_next_range(0, 99) < 80
-                ? rng_next_range(0, 2) : rng_next_range(7, 9);
+            // Alta prioridade mapeada para [0, 2] e Baixa para [7, 9] (considerando range total 0-9)
+            priority = (rng_next_range(0, 99) < 70) 
+                ? rng_next_range(0, 2) 
+                : rng_next_range(7, 9);
         } else {
+            // Outros cenários: Prioridade Uniforme [0, 9] (representando 1 a 10)
             priority = rng_next_range(0, 9);
         }
+        
         if (scenario_id == 1 || scenario_id == 4) {
             is_pouca_es = rng_next_range(0, 1);
-            is_curto_cpu = rng_next_range(0, 1);
         }
         if (scenario_id == 2) {
             num_bursts = rng_next_range(5, 8);
@@ -107,13 +112,13 @@ ProcessQueue* workload_generate(int process_count, const char *scenario, uint64_
             int cpu;
             int io = 0;
 
-            if (scenario_id == 2) cpu = rng_next_range(1, 5);
+            if (scenario_id == 2) cpu = rng_next_range(2, 8);
             else if (scenario_id == 3) cpu = rng_next_range(20, 60);
-            else cpu = is_curto_cpu ? rng_next_range(1, 6) : rng_next_range(15, 40);
+            else cpu = rng_next_range(5, 20);
 
             if (i < num_bursts - 1) {
-                if (scenario_id == 2) io = rng_next_range(10, 30);
-                else if (scenario_id == 3) io = rng_next_range(5, 15);
+                if (scenario_id == 2) io = rng_next_range(15, 40);
+                else if (scenario_id == 3) io = rng_next_range(2, 8);
                 else io = rng_next_range(5, 20);
             }
             if (!process_add_burst(p, cpu, io)) {

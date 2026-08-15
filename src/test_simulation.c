@@ -269,6 +269,8 @@ static int test_individual_and_aggregate_metrics(void) {
     if (!nearly_equal(result.jain_slowdown_pct, 90.0)) return 1;
     if (result.jain_slowdown_pct <= 0.0 || result.jain_slowdown_pct > 100.0) return 1;
 
+    if (result.global_total_cpu != 2 || result.global_total_io != 0) return 1;
+
     simulation_result_destroy(&result);
     return 0;
 }
