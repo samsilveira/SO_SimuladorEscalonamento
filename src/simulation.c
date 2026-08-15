@@ -2,10 +2,40 @@
 
 #include "scheduler.h"
 
+#include <assert.h>
 #include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
+
+static void check_invariants(Process **processes, int process_count, int64_t current_time, int64_t last_time) {
+    int running_count = 0;
+    int state_sum = 0;
+    int i;
+    for (i = 0; i < process_count; i++) {
+        Process *p = processes[i];
+        if (p->state == PROCESS_RUNNING) running_count++;
+        if (p->state == PROCESS_NEW || p->state == PROCESS_READY || p->state == PROCESS_RUNNING || p->state == PROCESS_BLOCKED || p->state == PROCESS_FINISHED) {
+            state_sum++;
+        }
+        if (p->state == PROCESS_FINISHED) {
+            assert(p->finish_time >= p->arrival_time);
+        }
+    }
+    if (running_count > 1) {
+        fprintf(stderr, "Invariant failed: count_running() <= 1 (actual: %d)\n", running_count);
+        assert(running_count <= 1);
+    }
+    if (state_sum != process_count) {
+        fprintf(stderr, "Invariant failed: process conservation (sum: %d, total: %d)\n", state_sum, process_count);
+        assert(state_sum == process_count);
+    }
+    if (current_time < last_time) {
+        fprintf(stderr, "Invariant failed: monotonic time (current: %ld, last: %ld)\n", (long)current_time, (long)last_time);
+        assert(current_time >= last_time);
+    }
+}
 
 static int checked_add_i64(int64_t left, int64_t right, int64_t *out) {
     if (out == NULL
@@ -413,6 +443,7 @@ int simulation_run(ProcessQueue *workload,
     int finished_count = 0;
     int process_count = 0;
     int64_t time = 0;
+    int64_t last_time = 0;
     int last_pid = 0;
     int idle_since_last = 1;
     int ok = 0;
@@ -524,6 +555,8 @@ int simulation_run(ProcessQueue *workload,
                 goto cleanup;
             }
         }
+        check_invariants(processes, process_count, time, last_time);
+        last_time = time;
     }
 
     result->makespan = time;
