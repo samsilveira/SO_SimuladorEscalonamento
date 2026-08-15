@@ -266,6 +266,71 @@ static int test_invalid_empty_zero_ideal_and_overflow_inputs(void) {
     return 0;
 }
 
+static int test_all_algorithms_on_basic_fixtures(void) {
+    const char *algorithms[] = {"fcfs", "rr", "prioridade", "proprio"};
+    int i;
+    for (i = 0; i < 4; i++) {
+        ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+        SimulationResult result = {0};
+        Process *p1 = make_process(1, 0, 1);
+        Process *p2 = make_process(2, 1, 2);
+        
+        if (workload == NULL) return 1;
+        if (!process_add_burst(p1, 2, 3) || !process_add_burst(p1, 1, 0)) return 1;
+        if (!process_add_burst(p2, 2, 0)) return 1;
+        if (!add_process(workload, p1) || !add_process(workload, p2)) return 1;
+        
+        if (!simulation_run(workload, algorithms[i], 1, 4, &result)) return 1;
+        simulation_result_destroy(&result);
+    }
+    return 0;
+}
+
+static int test_extreme_inputs(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    int i;
+    
+    if (workload == NULL) return 1;
+    for (i = 1; i <= 1000; i++) {
+        Process *p = make_process(i, i % 10, i % 4);
+        if (!process_add_burst(p, 1, 1) || !process_add_burst(p, 1, 0)) return 1;
+        if (!add_process(workload, p)) return 1;
+    }
+    
+    if (!simulation_run(workload, "rr", 1, 2, &result)) return 1;
+    if (result.process_count != 1000) return 1;
+    simulation_result_destroy(&result);
+    return 0;
+}
+
+static int test_determinism(void) {
+    ProcessQueue *workload1 = queue_create(QUEUE_FUTURE, compare_arrival);
+    ProcessQueue *workload2 = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result1 = {0};
+    SimulationResult result2 = {0};
+    int i;
+    
+    if (workload1 == NULL || workload2 == NULL) return 1;
+    for (i = 1; i <= 10; i++) {
+        Process *p1 = make_process(i, i, 0);
+        Process *p2 = make_process(i, i, 0);
+        if (!process_add_burst(p1, i, i) || !process_add_burst(p1, i, 0)) return 1;
+        if (!process_add_burst(p2, i, i) || !process_add_burst(p2, i, 0)) return 1;
+        if (!add_process(workload1, p1) || !add_process(workload2, p2)) return 1;
+    }
+    
+    if (!simulation_run(workload1, "prioridade", 1, 2, &result1)) return 1;
+    if (!simulation_run(workload2, "prioridade", 1, 2, &result2)) return 1;
+    
+    if (result1.makespan != result2.makespan) return 1;
+    if (result1.context_switches != result2.context_switches) return 1;
+    
+    simulation_result_destroy(&result1);
+    simulation_result_destroy(&result2);
+    return 0;
+}
+
 int simulation_run_all_tests(void) {
     if (test_manual_timeline_with_io_and_context_switch()) {
         fprintf(stderr, "test_manual_timeline_with_io_and_context_switch failed\n");
@@ -305,6 +370,19 @@ int simulation_run_all_tests(void) {
     }
     if (test_invalid_empty_zero_ideal_and_overflow_inputs()) {
         fprintf(stderr, "test_invalid_empty_zero_ideal_and_overflow_inputs failed\n");
+        return 1;
+    }
+
+    if (test_all_algorithms_on_basic_fixtures()) {
+        fprintf(stderr, "test_all_algorithms_on_basic_fixtures failed\n");
+        return 1;
+    }
+    if (test_extreme_inputs()) {
+        fprintf(stderr, "test_extreme_inputs failed\n");
+        return 1;
+    }
+    if (test_determinism()) {
+        fprintf(stderr, "test_determinism failed\n");
         return 1;
     }
 
