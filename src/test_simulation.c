@@ -332,6 +332,10 @@ static int test_determinism(void) {
 }
 
 int simulation_run_all_tests(void) {
+    if (simulation_invariants_self_test()) {
+        fprintf(stderr, "simulation_invariants_self_test failed\n");
+        return 1;
+    }
     if (test_manual_timeline_with_io_and_context_switch()) {
         fprintf(stderr, "test_manual_timeline_with_io_and_context_switch failed\n");
         return 1;

@@ -2,40 +2,11 @@
 
 #include "scheduler.h"
 
-#include <assert.h>
 #include <limits.h>
 #include <math.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
-
-static void check_invariants(Process **processes, int process_count, int64_t current_time, int64_t last_time) {
-    int running_count = 0;
-    int state_sum = 0;
-    int i;
-    for (i = 0; i < process_count; i++) {
-        Process *p = processes[i];
-        if (p->state == PROCESS_RUNNING) running_count++;
-        if (p->state == PROCESS_NEW || p->state == PROCESS_READY || p->state == PROCESS_RUNNING || p->state == PROCESS_BLOCKED || p->state == PROCESS_FINISHED) {
-            state_sum++;
-        }
-        if (p->state == PROCESS_FINISHED) {
-            assert(p->finish_time >= p->arrival_time);
-        }
-    }
-    if (running_count > 1) {
-        fprintf(stderr, "Invariant failed: count_running() <= 1 (actual: %d)\n", running_count);
-        assert(running_count <= 1);
-    }
-    if (state_sum != process_count) {
-        fprintf(stderr, "Invariant failed: process conservation (sum: %d, total: %d)\n", state_sum, process_count);
-        assert(state_sum == process_count);
-    }
-    if (current_time < last_time) {
-        fprintf(stderr, "Invariant failed: monotonic time (current: %ld, last: %ld)\n", (long)current_time, (long)last_time);
-        assert(current_time >= last_time);
-    }
-}
+#include <stdlib.h>
 
 static int checked_add_i64(int64_t left, int64_t right, int64_t *out) {
     if (out == NULL
@@ -133,6 +104,173 @@ static int validate_processes(Process **processes, int count) {
     }
 
     return 1;
+}
+
+static int count_queue_in_state(const ProcessQueue *queue, ProcessState expected_state, int process_count, int *out) {
+    const ProcessNode *node = queue != NULL ? queue->head : NULL;
+    int count = 0;
+
+    if (out == NULL) return 0;
+    while (node != NULL) {
+        if (node->process == NULL || node->process->state != expected_state || count == process_count) {
+            return 0;
+        }
+        count += 1;
+        node = node->next;
+    }
+    *out = count;
+    return 1;
+}
+
+static int check_invariants(Process **processes,
+                            int process_count,
+                            const ProcessQueue *future,
+                            const ProcessQueue *blocked,
+                            int ready_queue_count,
+                            const Process *running,
+                            const Process *context_target,
+                            int finished_count,
+                            int64_t current_time,
+                            int64_t last_time,
+                            FILE *diagnostic) {
+    int state_counts[5] = {0};
+    int future_count = 0;
+    int blocked_count = 0;
+    int i;
+
+    if (processes == NULL || process_count <= 0 || ready_queue_count < 0
+        || finished_count < 0 || (running != NULL && running == context_target)
+        || !count_queue_in_state(future, PROCESS_NEW, process_count, &future_count)
+        || !count_queue_in_state(blocked, PROCESS_BLOCKED, process_count, &blocked_count)) {
+        if (diagnostic != NULL) {
+            fprintf(diagnostic, "Invariant failed: invalid process container\n");
+        }
+        return 0;
+    }
+
+    for (i = 0; i < process_count; i += 1) {
+        const Process *process = processes[i];
+
+        if (process == NULL || process->state < PROCESS_NEW
+            || process->state > PROCESS_FINISHED) {
+            if (diagnostic != NULL) {
+                fprintf(diagnostic, "Invariant failed: invalid state at process index %d\n", i);
+            }
+            return 0;
+        }
+        state_counts[process->state] += 1;
+        if (process->state == PROCESS_FINISHED
+            && process->finish_time < process->arrival_time) {
+            if (diagnostic != NULL) {
+                fprintf(diagnostic,
+                        "Invariant failed: negative turnaround for pid %d\n",
+                        process->pid);
+            }
+            return 0;
+        }
+    }
+
+    if ((running == NULL && state_counts[PROCESS_RUNNING] != 0)
+        || (running != NULL
+            && (running->state != PROCESS_RUNNING
+                || state_counts[PROCESS_RUNNING] != 1))) {
+        if (diagnostic != NULL) {
+            fprintf(diagnostic,
+                    "Invariant failed: CPU ownership (running states: %d)\n",
+                    state_counts[PROCESS_RUNNING]);
+        }
+        return 0;
+    }
+    if (context_target != NULL && context_target->state != PROCESS_READY) {
+        if (diagnostic != NULL) {
+            fprintf(diagnostic, "Invariant failed: invalid context-switch target\n");
+        }
+        return 0;
+    }
+    if (state_counts[PROCESS_NEW] != future_count
+        || state_counts[PROCESS_READY]
+            != ready_queue_count + (context_target != NULL ? 1 : 0)
+        || state_counts[PROCESS_BLOCKED] != blocked_count
+        || state_counts[PROCESS_FINISHED] != finished_count) {
+        if (diagnostic != NULL) {
+            fprintf(diagnostic,
+                    "Invariant failed: process conservation "
+                    "(new=%d/%d, ready=%d/%d, blocked=%d/%d, finished=%d/%d)\n",
+                    state_counts[PROCESS_NEW], future_count,
+                    state_counts[PROCESS_READY],
+                    ready_queue_count + (context_target != NULL ? 1 : 0),
+                    state_counts[PROCESS_BLOCKED], blocked_count,
+                    state_counts[PROCESS_FINISHED], finished_count);
+        }
+        return 0;
+    }
+    if (current_time < last_time) {
+        if (diagnostic != NULL) {
+            fprintf(diagnostic,
+                    "Invariant failed: monotonic time (current: %ld, last: %ld)\n",
+                    (long)current_time, (long)last_time);
+        }
+        return 0;
+    }
+    return 1;
+}
+
+int simulation_invariants_self_test(void) {
+    Process first = {0};
+    Process second = {0};
+    Process *processes[] = {&first, &second};
+    ProcessNode second_node = {&second, NULL};
+    ProcessNode first_node = {&first, &second_node};
+    ProcessQueue future = {&first_node, NULL, QUEUE_FUTURE};
+    ProcessQueue blocked = {NULL, NULL, QUEUE_BLOCKED};
+
+    first.pid = 1;
+    first.state = PROCESS_NEW;
+    first.finish_time = -1;
+    second.pid = 2;
+    second.state = PROCESS_NEW;
+    second.finish_time = -1;
+
+    if (!check_invariants(processes, 2, &future, &blocked, 0, NULL, NULL,
+                          0, 0, 0, NULL)) {
+        return 1;
+    }
+
+    second.state = PROCESS_READY;
+    if (check_invariants(processes, 2, &future, &blocked, 1, NULL, NULL,
+                         0, 0, 0, NULL)) {
+        return 1;
+    }
+    second.state = PROCESS_NEW;
+
+    first.state = PROCESS_RUNNING;
+    if (check_invariants(processes, 2, &future, &blocked, 0, NULL, NULL,
+                         0, 0, 0, NULL)) {
+        return 1;
+    }
+    first.state = PROCESS_NEW;
+
+    first_node.process = &second;
+    first_node.next = NULL;
+    future.head = &first_node;
+    first.state = PROCESS_FINISHED;
+    first.arrival_time = 5;
+    first.finish_time = 4;
+    if (check_invariants(processes, 2, &future, &blocked, 0, NULL, NULL,
+                         1, 5, 5, NULL)) {
+        return 1;
+    }
+
+    first.state = PROCESS_NEW;
+    first.arrival_time = 0;
+    first.finish_time = -1;
+    first_node.process = &first;
+    first_node.next = &second_node;
+    if (check_invariants(processes, 2, &future, &blocked, 0, NULL, NULL,
+                         0, 4, 5, NULL)) {
+        return 1;
+    }
+    return 0;
 }
 
 static int record_event(SimulationResult *result, int64_t time, SimulationEventType type, int pid) {
@@ -441,6 +579,7 @@ int simulation_run(ProcessQueue *workload,
     int64_t context_end = -1;
     int quantum_used = 0;
     int finished_count = 0;
+    int ready_queue_count = 0;
     int process_count = 0;
     int64_t time = 0;
     int64_t last_time = 0;
@@ -527,6 +666,24 @@ int simulation_run(ProcessQueue *workload,
             }
         }
 
+        {
+            size_t event_index = result->event_count;
+            int preemptions_enqueued = 0;
+            int selected_from_ready = 0;
+
+            while (event_index > 0 && result->events[event_index - 1].time == time) {
+                SimulationEventType type = result->events[event_index - 1].type;
+
+                if (type == SIM_EVENT_PREEMPT) preemptions_enqueued += 1;
+                if (!dispatched_from_context
+                    && (type == SIM_EVENT_DISPATCH || type == SIM_EVENT_CONTEXT_SWITCH)) {
+                    selected_from_ready = 1;
+                }
+                event_index -= 1;
+            }
+            ready_queue_count += ready_count + preemptions_enqueued - selected_from_ready;
+        }
+
         if (running != NULL) {
             running->remaining_cpu -= 1;
             quantum_used += 1;
@@ -555,10 +712,25 @@ int simulation_run(ProcessQueue *workload,
                 goto cleanup;
             }
         }
-        check_invariants(processes, process_count, time, last_time);
+        if (!check_invariants(processes, process_count, workload, blocked,
+                              ready_queue_count, running, context_target,
+                              finished_count, time, last_time, stderr)) {
+            goto cleanup;
+        }
         last_time = time;
     }
 
+    if (finished_count != process_count) {
+        fprintf(stderr,
+                "Invariant failed: simulation stalled (%d of %d processes finished)\n",
+                finished_count, process_count);
+        goto cleanup;
+    }
+    if (!check_invariants(processes, process_count, workload, blocked,
+                          ready_queue_count, running, context_target,
+                          finished_count, time, last_time, stderr)) {
+        goto cleanup;
+    }
     result->makespan = time;
     if (!compute_metrics(processes, process_count, result)) {
         goto cleanup;
