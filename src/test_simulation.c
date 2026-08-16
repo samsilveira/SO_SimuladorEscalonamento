@@ -159,6 +159,128 @@ static int test_round_robin_preemption(void) {
     return 0;
 }
 
+static int test_rr_natural_completion_precedes_quantum(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    Process *p1 = make_process(1, 0, 0);
+    Process *p2 = make_process(2, 0, 0);
+
+    if (workload == NULL) return 1;
+    if (!process_add_burst(p1, 1, 0) || !process_add_burst(p2, 2, 0)) return 1;
+    if (!add_process(workload, p1) || !add_process(workload, p2)) return 1;
+    if (!simulation_run(workload, "rr", 0, 2, &result)) return 1;
+
+    if (result.makespan != 3
+        || !has_event(&result, 1, SIM_EVENT_FINISH, 1)
+        || !has_event(&result, 3, SIM_EVENT_FINISH, 2)
+        || has_event(&result, 1, SIM_EVENT_PREEMPT, 1)
+        || has_event(&result, 3, SIM_EVENT_PREEMPT, 2)) return 1;
+
+    simulation_result_destroy(&result);
+    return 0;
+}
+
+static int test_rr_io_discards_quantum_and_returns_at_queue_end(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    Process *p1 = make_process(1, 0, 0);
+    Process *p2 = make_process(2, 0, 0);
+
+    if (workload == NULL) return 1;
+    if (!process_add_burst(p1, 1, 2) || !process_add_burst(p1, 1, 0)
+        || !process_add_burst(p2, 4, 0)) return 1;
+    if (!add_process(workload, p1) || !add_process(workload, p2)) return 1;
+    if (!simulation_run(workload, "rr", 0, 2, &result)) return 1;
+
+    if (!has_event(&result, 1, SIM_EVENT_IO_START, 1)
+        || has_event(&result, 1, SIM_EVENT_PREEMPT, 1)
+        || !has_event(&result, 3, SIM_EVENT_IO_END, 1)
+        || !has_event(&result, 3, SIM_EVENT_PREEMPT, 2)
+        || !has_event(&result, 3, SIM_EVENT_DISPATCH, 1)
+        || !has_event(&result, 4, SIM_EVENT_FINISH, 1)
+        || !has_event(&result, 6, SIM_EVENT_FINISH, 2)) return 1;
+
+    simulation_result_destroy(&result);
+    return 0;
+}
+
+static int test_rr_simultaneous_io_returns_use_pid_order(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    Process *p1 = make_process(1, 0, 0);
+    Process *p2 = make_process(2, 0, 0);
+    Process *p3 = make_process(3, 2, 0);
+
+    if (workload == NULL) return 1;
+    if (!process_add_burst(p1, 1, 3) || !process_add_burst(p1, 1, 0)
+        || !process_add_burst(p2, 1, 2) || !process_add_burst(p2, 1, 0)
+        || !process_add_burst(p3, 4, 0)) return 1;
+    if (!add_process(workload, p1) || !add_process(workload, p2)
+        || !add_process(workload, p3)) return 1;
+    if (!simulation_run(workload, "rr", 0, 10, &result)) return 1;
+
+    if (!has_event(&result, 4, SIM_EVENT_IO_END, 1)
+        || !has_event(&result, 4, SIM_EVENT_IO_END, 2)
+        || !has_event(&result, 6, SIM_EVENT_FINISH, 3)
+        || !has_event(&result, 6, SIM_EVENT_DISPATCH, 1)
+        || !has_event(&result, 7, SIM_EVENT_FINISH, 1)
+        || !has_event(&result, 7, SIM_EVENT_DISPATCH, 2)
+        || !has_event(&result, 8, SIM_EVENT_FINISH, 2)) return 1;
+
+    simulation_result_destroy(&result);
+    return 0;
+}
+
+static int test_priority_is_non_preemptive(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    Process *running = make_process(1, 0, 5);
+    Process *higher_priority = make_process(2, 1, 0);
+
+    if (workload == NULL) return 1;
+    if (!process_add_burst(running, 3, 0)
+        || !process_add_burst(higher_priority, 1, 0)) return 1;
+    if (!add_process(workload, running) || !add_process(workload, higher_priority)) return 1;
+    if (!simulation_run(workload, "prioridade", 0, 4, &result)) return 1;
+
+    if (!has_event(&result, 1, SIM_EVENT_ARRIVAL, 2)
+        || has_event(&result, 1, SIM_EVENT_PREEMPT, 1)
+        || !has_event(&result, 3, SIM_EVENT_FINISH, 1)
+        || !has_event(&result, 3, SIM_EVENT_DISPATCH, 2)
+        || !has_event(&result, 4, SIM_EVENT_FINISH, 2)) return 1;
+
+    simulation_result_destroy(&result);
+    return 0;
+}
+
+static int test_priority_simultaneous_io_returns_use_pid_tie_break(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    Process *p1 = make_process(1, 0, 2);
+    Process *p2 = make_process(2, 0, 2);
+    Process *p3 = make_process(3, 2, 0);
+
+    if (workload == NULL) return 1;
+    if (!process_add_burst(p1, 1, 3) || !process_add_burst(p1, 1, 0)
+        || !process_add_burst(p2, 1, 2) || !process_add_burst(p2, 1, 0)
+        || !process_add_burst(p3, 4, 0)) return 1;
+    if (!add_process(workload, p1) || !add_process(workload, p2)
+        || !add_process(workload, p3)) return 1;
+    if (!simulation_run(workload, "prioridade", 0, 4, &result)) return 1;
+
+    if (!has_event(&result, 4, SIM_EVENT_IO_END, 1)
+        || !has_event(&result, 4, SIM_EVENT_IO_END, 2)
+        || has_event(&result, 4, SIM_EVENT_PREEMPT, 3)
+        || !has_event(&result, 6, SIM_EVENT_FINISH, 3)
+        || !has_event(&result, 6, SIM_EVENT_DISPATCH, 1)
+        || !has_event(&result, 7, SIM_EVENT_FINISH, 1)
+        || !has_event(&result, 7, SIM_EVENT_DISPATCH, 2)
+        || !has_event(&result, 8, SIM_EVENT_FINISH, 2)) return 1;
+
+    simulation_result_destroy(&result);
+    return 0;
+}
+
 static int test_context_switch_cost_and_cpu_unavailability(void) {
     ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
     SimulationResult result = {0};
@@ -329,6 +451,26 @@ int simulation_run_all_tests(void) {
     }
     if (test_round_robin_preemption()) {
         fprintf(stderr, "test_round_robin_preemption failed\n");
+        return 1;
+    }
+    if (test_rr_natural_completion_precedes_quantum()) {
+        fprintf(stderr, "test_rr_natural_completion_precedes_quantum failed\n");
+        return 1;
+    }
+    if (test_rr_io_discards_quantum_and_returns_at_queue_end()) {
+        fprintf(stderr, "test_rr_io_discards_quantum_and_returns_at_queue_end failed\n");
+        return 1;
+    }
+    if (test_rr_simultaneous_io_returns_use_pid_order()) {
+        fprintf(stderr, "test_rr_simultaneous_io_returns_use_pid_order failed\n");
+        return 1;
+    }
+    if (test_priority_is_non_preemptive()) {
+        fprintf(stderr, "test_priority_is_non_preemptive failed\n");
+        return 1;
+    }
+    if (test_priority_simultaneous_io_returns_use_pid_tie_break()) {
+        fprintf(stderr, "test_priority_simultaneous_io_returns_use_pid_tie_break failed\n");
         return 1;
     }
     if (test_context_switch_cost_and_cpu_unavailability()) {

@@ -83,7 +83,31 @@ ficam prontos simultaneamente são entregues à interface em ordem crescente de
 PID, tornando o resultado independente da ordem de alocação ou de percurso das
 estruturas internas.
 \subsection{Round Robin}
+O Round Robin (RR) usa uma fila FIFO e quantum padrão de 4 ticks, que pode ser
+configurado por execução e deve ser um inteiro positivo. A cada despacho o
+contador do quantum é reiniciado. Se a rajada de CPU termina antes ou exatamente
+no mesmo tick em que o quantum se esgota, prevalece a conclusão natural: o
+processo termina ou inicia E/S sem ser registrado como preemptado, e qualquer
+fração restante do quantum é descartada.
+
+Quando o quantum termina e ainda resta CPU na rajada, conclusões de E/S e
+chegadas ocorridas no mesmo tick são primeiro inseridas por PID crescente. O
+processo preemptado recebe um novo $ready\_since$ e é então reinserido no fim da
+fila. Retornos de E/S também entram no fim da fila; retornos simultâneos são
+desempatados pelo menor PID. Se nenhum outro processo estiver pronto, o mesmo
+PID continua com um quantum renovado, sem preempção nem troca de contexto.
 \subsection{Prioridade não preemptiva}
+Nesta política, valores numéricos menores representam prioridades mais altas,
+na faixa de 0 a 9. A fila de prontos é ordenada pela tupla
+$(prioridade, ready\_since, PID)$, de modo que processos com a mesma prioridade
+são escolhidos primeiro pelo maior tempo contínuo de espera e depois pelo menor
+PID. A prioridade é estática durante toda a execução.
+
+A política é estritamente não preemptiva: a chegada ou o retorno de E/S de um
+processo com prioridade mais alta não interrompe a rajada atualmente em
+execução. A ordenação por prioridade só é consultada quando a CPU é liberada por
+término ou bloqueio. Retornos simultâneos de E/S seguem o mesmo desempate
+determinístico, sem depender da ordem interna das estruturas de dados.
 \subsection{Algoritmo proposto}
 
 \section{Metodologia}
