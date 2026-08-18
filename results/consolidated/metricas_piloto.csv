@@ -1,0 +1,5 @@
+scenario,total_cpu,total_io,ratio_io_cpu,ratio_cpu_io
+equilibrado,43597,31524,0.72,1.38
+io_bound,32813,150654,4.59,0.22
+cpu_bound,80112,5014,0.06,15.98
+desbalanceado,42734,30714,0.72,1.39
