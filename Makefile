@@ -44,19 +44,25 @@ $(BUILD_DIR)/release/%.o: $(SRC_DIR)/%.c
 test: dev
 	./$(TARGET_DEV) --self-test
 	sh tests/test_cli.sh ./$(TARGET_DEV)
+	python3 tests/test_experiment.py
 
 simulate: release
 	./$(TARGET_RELEASE) --config configs/default.conf --algorithm fcfs
 
 batch: release
-	@mkdir -p results/raw
-	./$(TARGET_RELEASE) --config configs/default.conf --algorithm fcfs \
-		--run-id equilibrado-fcfs-seed-1 \
-		--workload-output results/raw/equilibrado_seed_1_workload.csv \
-		--output results/raw/equilibrado_fcfs_seed_1.csv
+	python3 scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE)
+
+batch-reduced: release
+	python3 scripts/run_experiment.py --experiment-id smoke --binary $(TARGET_RELEASE) --reduced
+
+batch-verify: release
+	python3 scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE) --verify-only
 
 graphs:
 	@mkdir -p results/figures results/consolidated
+
+analyze:
+	$(CC) $(CPPFLAGS) $(CSTD) $(WARNINGS) -fanalyzer -fsyntax-only $(SRCS)
 
 compile_commands:
 	@if command -v bear >/dev/null 2>&1; then \
@@ -70,4 +76,4 @@ compile_commands:
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR) results/raw
 
-.PHONY: all dev release test simulate batch graphs compile_commands clean
+.PHONY: all dev release test simulate batch batch-reduced batch-verify graphs analyze compile_commands clean

@@ -85,7 +85,10 @@ make release         # build otimizado com -O2
 make test            # autoteste do executável
 make simulate        # execução simples documentada
 make batch           # exemplo de lote em results/raw/
+make batch-reduced   # lote rapido: 1 cenario, 2 seeds, 4 algoritmos, 10 processos
+make batch-verify    # valida a completude do experimento principal sem executar
 make graphs          # prepara diretório de figuras
+make analyze         # análise estática do código C com GCC
 make compile_commands
 make clean           # remove build, bin e results/raw/
 ```
@@ -129,3 +132,30 @@ run_id,pid,arrival,completion,turnaround,ideal_time,slowdown,priority,total_cpu,
 Valores `double` usam 17 algarismos significativos. Todas as saídas persistentes da execução são escritas primeiro em temporários nos respectivos diretórios e só são publicadas depois que todas foram escritas, descarregadas e fechadas com sucesso. Uma falha preserva os destinos anteriores e remove os temporários. Caminhos equivalentes por `.`/`..` ou links são rejeitados quando causariam colisão entre entradas e saídas.
 
 `make clean` não remove `docs/`, `artigo/`, `results/consolidated/` nem `results/figures/`.
+
+## Executor experimental
+
+O executor da matriz principal usa apenas Python 3 e sua biblioteca padrão. Ele cria
+400 workloads, reutiliza cada carga nas quatro políticas e registra as 1.600 execuções
+em um manifesto atualizado atomicamente:
+
+```sh
+make release
+python3 scripts/run_experiment.py --experiment-id main-2026-08
+```
+
+Os artefatos ficam em `results/raw/<experiment-id>/{manifest.json,workloads,runs}`.
+Uma segunda chamada com os mesmos argumentos retoma o experimento e executa somente
+itens ausentes ou inválidos. Commit, tag, hash do executável, configuração efetiva e
+matriz precisam coincidir; em caso de mudança, escolha um novo `--experiment-id`.
+
+Para uma validação local/CI rápida, usando exatamente o mesmo fluxo:
+
+```sh
+python3 scripts/run_experiment.py --experiment-id smoke --reduced
+python3 scripts/run_experiment.py --experiment-id smoke --reduced --verify-only
+```
+
+O modo reduzido executa 1 cenário × 2 seeds × 4 algoritmos com 10 processos. O lote
+principal e o reduzido não geram métricas individuais. `--verify-only` confere schema,
+linha única, identidade, parâmetros e hashes de todos os workloads e resultados.
