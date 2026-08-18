@@ -12,6 +12,7 @@ typedef struct {
     int priority;
     int64_t arrival;
     int64_t ready_since;
+    int64_t cpu_consumed;
 } SchedulerProcessView;
 
 typedef struct Scheduler Scheduler;
@@ -29,7 +30,9 @@ int scheduler_on_arrival(Scheduler *scheduler, const SchedulerProcessView *proce
 int scheduler_on_io_complete(Scheduler *scheduler, const SchedulerProcessView *process);
 int scheduler_on_preempted(Scheduler *scheduler, const SchedulerProcessView *process);
 int scheduler_on_finish(Scheduler *scheduler, int pid);
-SchedulerSelectResult scheduler_select_next(Scheduler *scheduler, int *pid);
+SchedulerSelectResult scheduler_select_next(Scheduler *scheduler,
+                                            int64_t current_time,
+                                            int *pid);
 int scheduler_should_preempt(const Scheduler *scheduler, int quantum_used);
 const char *scheduler_name(const Scheduler *scheduler);
 

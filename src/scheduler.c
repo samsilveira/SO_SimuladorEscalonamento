@@ -23,7 +23,8 @@ typedef struct {
 static int valid_view(const SchedulerProcessView *process) {
     return process != NULL && process->pid > 0 && process->priority >= 0
         && process->priority <= 9 && process->arrival >= 0
-        && process->ready_since >= process->arrival;
+        && process->ready_since >= process->arrival
+        && process->cpu_consumed >= 0;
 }
 
 static int generic_precedes(const GenericSchedulerContext *context,
@@ -79,10 +80,12 @@ static int generic_finish(void *opaque, int pid) {
     return opaque != NULL && pid > 0;
 }
 
-static SchedulerSelectResult generic_select(void *opaque, int *pid) {
+static SchedulerSelectResult generic_select(void *opaque, int64_t current_time,
+                                             int *pid) {
     GenericSchedulerContext *context = (GenericSchedulerContext *)opaque;
     ViewNode *node;
 
+    (void)current_time;
     if (context == NULL || pid == NULL) return SCHEDULER_SELECT_ERROR;
     if (context->head == NULL) {
         *pid = 0;
@@ -155,7 +158,7 @@ Scheduler *scheduler_create(const char *name, int rr_quantum) {
         return generic_create("prioridade", VIEW_QUEUE_PRIORITY, rr_quantum, 0);
     }
     if (strcmp(name, "proprio") == 0) {
-        return generic_create("proprio", VIEW_QUEUE_PRIORITY, rr_quantum, 0);
+        return scheduler_pdbh_create();
     }
     return NULL;
 }
@@ -185,9 +188,10 @@ int scheduler_on_finish(Scheduler *scheduler, int pid) {
     return scheduler != NULL && scheduler->operations->on_finish(scheduler->context, pid);
 }
 
-SchedulerSelectResult scheduler_select_next(Scheduler *scheduler, int *pid) {
+SchedulerSelectResult scheduler_select_next(Scheduler *scheduler,
+                                            int64_t current_time, int *pid) {
     if (scheduler == NULL) return SCHEDULER_SELECT_ERROR;
-    return scheduler->operations->select_next(scheduler->context, pid);
+    return scheduler->operations->select_next(scheduler->context, current_time, pid);
 }
 
 int scheduler_should_preempt(const Scheduler *scheduler, int quantum_used) {

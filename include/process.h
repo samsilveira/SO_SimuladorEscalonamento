@@ -26,6 +26,7 @@ typedef struct Process {
     int64_t total_io_original;
     int64_t start_time;
     int64_t finish_time;
+    int64_t cpu_consumed;       // CPU efetivamente executada ate o instante atual
     
     int64_t ready_since;         // instante de entrada atual na fila de prontos
 } Process;
