@@ -53,24 +53,60 @@ static int test_fcfs_ready_since_and_pid_order(void) {
     return 0;
 }
 
-static int test_other_policies_use_common_contract(void) {
+static int test_rr_fifo_quantum_and_reinsertion(void) {
     Scheduler *rr = scheduler_create("rr", 2);
+    SchedulerProcessView p1 = view(1, 7, 0, 0);
+    SchedulerProcessView p2 = view(2, 1, 0, 0);
+    SchedulerProcessView p3 = view(3, 4, 1, 3);
+
+    if (rr == NULL || scheduler_create("rr", 0) != NULL) return 1;
+    if (!scheduler_on_arrival(rr, &p1) || !scheduler_on_arrival(rr, &p2)
+        || scheduler_on_io_complete(rr, &p2)
+        || !expect_pid(rr, 1)
+        || scheduler_should_preempt(rr, 1)
+        || !scheduler_should_preempt(rr, 2)
+        || !scheduler_should_preempt(rr, 3)
+        || !scheduler_on_io_complete(rr, &p3)
+        || !scheduler_on_preempted(rr, &p1)
+        || !expect_pid(rr, 2)
+        || !expect_pid(rr, 3)
+        || !expect_pid(rr, 1)) return 1;
+
+    scheduler_destroy(rr);
+    return 0;
+}
+
+static int test_priority_order_and_non_preemption(void) {
     Scheduler *priority = scheduler_create("prioridade", 4);
+    SchedulerProcessView lower_priority = view(1, 7, 0, 0);
+    SchedulerProcessView later = view(4, 1, 0, 8);
+    SchedulerProcessView higher_pid = view(3, 1, 0, 5);
+    SchedulerProcessView lower_pid = view(2, 1, 0, 5);
+
+    if (priority == NULL) return 1;
+    if (!scheduler_on_arrival(priority, &lower_priority)
+        || !scheduler_on_arrival(priority, &later)
+        || !scheduler_on_io_complete(priority, &higher_pid)
+        || !scheduler_on_arrival(priority, &lower_pid)
+        || scheduler_should_preempt(priority, 1000000)
+        || !expect_pid(priority, 2)
+        || !expect_pid(priority, 3)
+        || !expect_pid(priority, 4)
+        || !expect_pid(priority, 1)) return 1;
+
+    scheduler_destroy(priority);
+    return 0;
+}
+
+static int test_own_policy_still_uses_common_contract(void) {
     Scheduler *own = scheduler_create("proprio", 4);
     SchedulerProcessView p1 = view(1, 7, 0, 0);
     SchedulerProcessView p2 = view(2, 1, 0, 0);
 
-    if (rr == NULL || priority == NULL || own == NULL) return 1;
-    if (!scheduler_on_arrival(rr, &p1) || !scheduler_on_arrival(rr, &p2)
-        || !expect_pid(rr, 1) || !scheduler_should_preempt(rr, 2)) return 1;
-    if (!scheduler_on_arrival(priority, &p1)
-        || !scheduler_on_arrival(priority, &p2)
-        || !expect_pid(priority, 2)) return 1;
+    if (own == NULL) return 1;
     if (!scheduler_on_arrival(own, &p1) || !scheduler_on_arrival(own, &p2)
         || !expect_pid(own, 2)) return 1;
 
-    scheduler_destroy(rr);
-    scheduler_destroy(priority);
     scheduler_destroy(own);
     return 0;
 }
@@ -84,8 +120,16 @@ int scheduler_run_all_tests(void) {
         fprintf(stderr, "test_fcfs_ready_since_and_pid_order failed\n");
         return 1;
     }
-    if (test_other_policies_use_common_contract()) {
-        fprintf(stderr, "test_other_policies_use_common_contract failed\n");
+    if (test_rr_fifo_quantum_and_reinsertion()) {
+        fprintf(stderr, "test_rr_fifo_quantum_and_reinsertion failed\n");
+        return 1;
+    }
+    if (test_priority_order_and_non_preemption()) {
+        fprintf(stderr, "test_priority_order_and_non_preemption failed\n");
+        return 1;
+    }
+    if (test_own_policy_still_uses_common_contract()) {
+        fprintf(stderr, "test_own_policy_still_uses_common_contract failed\n");
         return 1;
     }
     return 0;

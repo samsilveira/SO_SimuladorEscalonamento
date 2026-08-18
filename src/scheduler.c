@@ -148,12 +148,8 @@ static Scheduler *generic_create(const char *name, ViewQueueOrder order,
 Scheduler *scheduler_create(const char *name, int rr_quantum) {
     if (name == NULL || rr_quantum <= 0) return NULL;
     if (strcmp(name, "fcfs") == 0) return scheduler_fcfs_create();
-    if (strcmp(name, "rr") == 0) {
-        return generic_create("rr", VIEW_QUEUE_FIFO, rr_quantum, 1);
-    }
-    if (strcmp(name, "prioridade") == 0) {
-        return generic_create("prioridade", VIEW_QUEUE_PRIORITY, rr_quantum, 0);
-    }
+    if (strcmp(name, "rr") == 0) return scheduler_rr_create(rr_quantum);
+    if (strcmp(name, "prioridade") == 0) return scheduler_priority_create();
     if (strcmp(name, "proprio") == 0) {
         return generic_create("proprio", VIEW_QUEUE_PRIORITY, rr_quantum, 0);
     }

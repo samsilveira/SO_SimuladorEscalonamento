@@ -93,6 +93,34 @@ imported_hash=$(awk -F, 'NR == 2 { print $3 }' "$temporary_directory/imported-re
     || fail "SHA-256 nao possui 64 caracteres hexadecimais"
 
 "$simulator" \
+    --scenario io_bound \
+    --algorithm prioridade \
+    --seed 42 \
+    --processes 1000 \
+    --run-id determinism \
+    --workload-output "$temporary_directory/determinism-a-workload.csv" \
+    --individual-output "$temporary_directory/determinism-a-individual.csv" \
+    --output "$temporary_directory/determinism-a-result.csv"
+"$simulator" \
+    --scenario io_bound \
+    --algorithm prioridade \
+    --seed 42 \
+    --processes 1000 \
+    --run-id determinism \
+    --workload-output "$temporary_directory/determinism-b-workload.csv" \
+    --individual-output "$temporary_directory/determinism-b-individual.csv" \
+    --output "$temporary_directory/determinism-b-result.csv"
+cmp "$temporary_directory/determinism-a-workload.csv" \
+    "$temporary_directory/determinism-b-workload.csv" \
+    || fail "mesma seed gerou workloads diferentes em processos separados"
+cmp "$temporary_directory/determinism-a-individual.csv" \
+    "$temporary_directory/determinism-b-individual.csv" \
+    || fail "mesma seed gerou metricas individuais diferentes em processos separados"
+cmp "$temporary_directory/determinism-a-result.csv" \
+    "$temporary_directory/determinism-b-result.csv" \
+    || fail "mesma seed gerou resultados agregados diferentes em processos separados"
+
+"$simulator" \
     --processes 2 \
     --run-id individual \
     --individual-output "$temporary_directory/individual.csv" \
@@ -125,6 +153,13 @@ printf '%s\n' \
     'schema_version=1' \
     'process_count=0' > "$temporary_directory/invalid-value.conf"
 expect_failure "$simulator" --config "$temporary_directory/invalid-value.conf" --self-test
+
+printf '%s\n' \
+    'schema_version=1' \
+    'rr_quantum=0' > "$temporary_directory/invalid-quantum.conf"
+expect_failure "$simulator" --config "$temporary_directory/invalid-quantum.conf" --self-test
+expect_failure "$simulator" --algorithm rr --processes 1 --rr-quantum 0
+expect_failure "$simulator" --algorithm rr --processes 1 --rr-quantum -1
 
 printf '%s\n' \
     'pid,arrival,priority,burst_index,burst_type,duration' \
