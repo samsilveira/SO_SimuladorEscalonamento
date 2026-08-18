@@ -26,7 +26,8 @@ static int enqueue(void *opaque, const SchedulerProcessView *process) {
 
     if (context == NULL || process == NULL || process->pid <= 0
         || process->priority < 0 || process->priority > 9
-        || process->arrival < 0 || process->ready_since < process->arrival) {
+        || process->arrival < 0 || process->ready_since < process->arrival
+        || process->cpu_consumed < 0) {
         return 0;
     }
     for (current = context->head; current != NULL; current = current->next) {
@@ -57,10 +58,12 @@ static int on_finish(void *opaque, int pid) {
     return opaque != NULL && pid > 0;
 }
 
-static SchedulerSelectResult select_next(void *opaque, int *pid) {
+static SchedulerSelectResult select_next(void *opaque, int64_t current_time,
+                                         int *pid) {
     FcfsContext *context = (FcfsContext *)opaque;
     FcfsNode *node;
 
+    (void)current_time;
     if (context == NULL || pid == NULL) return SCHEDULER_SELECT_ERROR;
     if (context->head == NULL) {
         *pid = 0;

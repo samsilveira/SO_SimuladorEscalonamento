@@ -365,6 +365,7 @@ static SchedulerProcessView scheduler_view(const Process *process) {
     view.priority = process->priority;
     view.arrival = process->arrival_time;
     view.ready_since = process->ready_since;
+    view.cpu_consumed = process->cpu_consumed;
     return view;
 }
 
@@ -709,7 +710,8 @@ int simulation_run(ProcessQueue *workload,
 
         if (preempted != NULL) {
             int selected_pid = 0;
-            SchedulerSelectResult selection = scheduler_select_next(scheduler, &selected_pid);
+            SchedulerSelectResult selection =
+                scheduler_select_next(scheduler, time, &selected_pid);
 
             if (selection == SCHEDULER_SELECT_ERROR) goto cleanup;
             if (selection == SCHEDULER_SELECT_EMPTY) {
@@ -738,7 +740,7 @@ int simulation_run(ProcessQueue *workload,
             if (next_process == NULL) {
                 int selected_pid = 0;
                 SchedulerSelectResult selection =
-                    scheduler_select_next(scheduler, &selected_pid);
+                    scheduler_select_next(scheduler, time, &selected_pid);
 
                 if (selection == SCHEDULER_SELECT_ERROR) goto cleanup;
                 if (selection == SCHEDULER_SELECT_OK) {
@@ -776,6 +778,10 @@ int simulation_run(ProcessQueue *workload,
 
         if (running != NULL) {
             running->remaining_cpu -= 1;
+            if (!checked_add_i64(running->cpu_consumed, 1,
+                                 &running->cpu_consumed)) {
+                goto cleanup;
+            }
             quantum_used += 1;
             if (!checked_add_i64(time, 1, &time)) {
                 goto cleanup;

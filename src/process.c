@@ -23,6 +23,7 @@ Process* process_create(int pid, int64_t arrival_time, int priority) {
     p->total_io_original = 0;
     p->start_time = -1;
     p->finish_time = -1;
+    p->cpu_consumed = 0;
     p->ready_since = -1;
     
     return p;

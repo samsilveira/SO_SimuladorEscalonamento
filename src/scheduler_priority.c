@@ -14,7 +14,8 @@ typedef struct {
 static int valid_view(const SchedulerProcessView *process) {
     return process != NULL && process->pid > 0
         && process->priority >= 0 && process->priority <= 9
-        && process->arrival >= 0 && process->ready_since >= process->arrival;
+        && process->arrival >= 0 && process->ready_since >= process->arrival
+        && process->cpu_consumed >= 0;
 }
 
 static int precedes(const SchedulerProcessView *left,
@@ -62,10 +63,12 @@ static int on_finish(void *opaque, int pid) {
     return opaque != NULL && pid > 0;
 }
 
-static SchedulerSelectResult select_next(void *opaque, int *pid) {
+static SchedulerSelectResult select_next(void *opaque, int64_t current_time,
+                                         int *pid) {
     PriorityContext *context = (PriorityContext *)opaque;
     PriorityNode *node;
 
+    (void)current_time;
     if (context == NULL || pid == NULL) return SCHEDULER_SELECT_ERROR;
     if (context->head == NULL) {
         *pid = 0;
