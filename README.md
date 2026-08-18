@@ -58,6 +58,7 @@ Seu SHA-256 é calculado sobre os bytes canônicos e registrado em todo resultad
 
 - `gcc`
 - `make`
+- Python 3 com suporte a `venv`; o Make instala as dependencias de analise em `.venv/`
 - Opcional para editores: `bear` ou `compiledb` para gerar `compile_commands.json`
 - No Windows deste ambiente, use `mingw32-make` se `make` não estiver no PATH
 
@@ -87,7 +88,9 @@ make simulate        # execução simples documentada
 make batch           # exemplo de lote em results/raw/
 make batch-reduced   # lote rapido: 1 cenario, 2 seeds, 4 algoritmos, 10 processos
 make batch-verify    # valida a completude do experimento principal sem executar
-make graphs          # prepara diretório de figuras
+make analysis-deps   # cria .venv/ e instala requirements-analysis.txt
+make graphs          # valida o lote e regenera summary.csv + 3 figuras com IC95%
+                     # Para outro ID preservado: make graphs EXPERIMENT_ID=<id>
 make analyze         # análise estática do código C com GCC
 make compile_commands
 make clean           # remove build, bin e results/raw/

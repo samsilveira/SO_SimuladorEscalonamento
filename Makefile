@@ -4,9 +4,14 @@ SRC_DIR = src
 INC_DIR = include
 BUILD_DIR = build
 BIN_DIR = bin
+PYTHON ?= python3
+VENV_DIR ?= .venv
+VENV_PYTHON = $(VENV_DIR)/bin/python
+ANALYSIS_DEPS_STAMP = $(VENV_DIR)/.analysis-deps.stamp
 
 TARGET_DEV = $(BIN_DIR)/simulador_dev
 TARGET_RELEASE = $(BIN_DIR)/simulador
+EXPERIMENT_ID ?= main
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 DEV_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/dev/%.o,$(SRCS))
@@ -46,25 +51,38 @@ $(BUILD_DIR)/analyze/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CSTD) $(WARNINGS) -fanalyzer -c $< -o $@
 
-test: dev
+$(VENV_PYTHON):
+	$(PYTHON) -m venv $(VENV_DIR)
+
+$(ANALYSIS_DEPS_STAMP): requirements-analysis.txt $(VENV_PYTHON)
+	$(VENV_PYTHON) -m pip install --requirement requirements-analysis.txt
+	@touch $@
+
+analysis-deps: $(ANALYSIS_DEPS_STAMP)
+
+test: dev analysis-deps
 	./$(TARGET_DEV) --self-test
 	sh tests/test_cli.sh ./$(TARGET_DEV)
-	python3 tests/test_experiment.py
+	$(VENV_PYTHON) tests/test_experiment.py
+	$(VENV_PYTHON) tests/test_analysis.py
 
 simulate: release
 	./$(TARGET_RELEASE) --config configs/default.conf --algorithm fcfs
 
 batch: release
-	python3 scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE)
+	$(PYTHON) scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE)
 
 batch-reduced: release
-	python3 scripts/run_experiment.py --experiment-id smoke --binary $(TARGET_RELEASE) --reduced
+	$(PYTHON) scripts/run_experiment.py --experiment-id smoke --binary $(TARGET_RELEASE) --reduced
 
 batch-verify: release
-	python3 scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE) --verify-only
+	$(PYTHON) scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE) --verify-only
 
-graphs:
-	@mkdir -p results/figures results/consolidated
+graphs: analysis-deps
+	$(VENV_PYTHON) scripts/analyze_experiment.py \
+		--experiment-dir results/raw/$(EXPERIMENT_ID) \
+		--summary-output results/consolidated/summary.csv \
+		--figures-dir results/figures
 
 analyze: $(ANALYZE_OBJS)
 
@@ -80,4 +98,4 @@ compile_commands:
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR) results/raw
 
-.PHONY: all dev release test simulate batch batch-reduced batch-verify graphs analyze compile_commands clean
+.PHONY: all dev release analysis-deps test simulate batch batch-reduced batch-verify graphs analyze compile_commands clean
