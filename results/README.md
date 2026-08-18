@@ -22,8 +22,9 @@ raw/<experiment_id>/
 ```
 
 O manifesto é a fonte de rastreabilidade e registra identidade do código/configuração,
-hashes SHA-256, comandos, horários, tentativas e falhas. Não copie arquivos entre
-experimentos: alterações de commit, binário ou configuração exigem outro identificador.
+hashes SHA-256, comandos, horários, tentativas, falhas e causas de reexecução. Não copie
+arquivos entre experimentos: alterações de commit, binário ou configuração exigem
+outro identificador.
 
 Resultados estatísticos pequenos e revisados pertencem a `consolidated/`; gráficos
 finais pertencem a `figures/`.

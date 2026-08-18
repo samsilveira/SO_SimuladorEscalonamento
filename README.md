@@ -158,4 +158,5 @@ python3 scripts/run_experiment.py --experiment-id smoke --reduced --verify-only
 
 O modo reduzido executa 1 cenário × 2 seeds × 4 algoritmos com 10 processos. O lote
 principal e o reduzido não geram métricas individuais. `--verify-only` confere schema,
-linha única, identidade, parâmetros e hashes de todos os workloads e resultados.
+linha única, identidade, parâmetros e hashes de todos os workloads e resultados sem
+alterar os artefatos; um manifesto existente é obrigatório para essa verificação.
