@@ -155,6 +155,13 @@ printf '%s\n' \
 expect_failure "$simulator" --config "$temporary_directory/invalid-value.conf" --self-test
 
 printf '%s\n' \
+    'schema_version=1' \
+    'rr_quantum=0' > "$temporary_directory/invalid-quantum.conf"
+expect_failure "$simulator" --config "$temporary_directory/invalid-quantum.conf" --self-test
+expect_failure "$simulator" --algorithm rr --processes 1 --rr-quantum 0
+expect_failure "$simulator" --algorithm rr --processes 1 --rr-quantum -1
+
+printf '%s\n' \
     'pid,arrival,priority,burst_index,burst_type,duration' \
     '1,0,3,1,CPU,2' \
     '1,0,3,2,CPU,1' > "$temporary_directory/invalid-workload.csv"

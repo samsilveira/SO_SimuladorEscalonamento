@@ -22,5 +22,7 @@ struct Scheduler {
 
 Scheduler *scheduler_fcfs_create(void);
 Scheduler *scheduler_pdbh_create(void);
+Scheduler *scheduler_rr_create(int quantum);
+Scheduler *scheduler_priority_create(void);
 
 #endif
