@@ -55,6 +55,7 @@ dkms.conf
 *.dwo
 
 graphify-out/*
+.venv/
 .env
 build/
 bin/
