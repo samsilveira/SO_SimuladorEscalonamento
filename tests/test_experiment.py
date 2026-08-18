@@ -4,6 +4,7 @@
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import unittest
 REPO = Path(__file__).resolve().parent.parent
 RUNNER = REPO / "scripts" / "run_experiment.py"
 SIMULATOR = REPO / "bin" / "simulador_dev"
+RUNNER_API = runpy.run_path(str(RUNNER))
 
 
 class ExperimentRunnerTests(unittest.TestCase):
@@ -40,6 +42,18 @@ class ExperimentRunnerTests(unittest.TestCase):
     def manifest(self, experiment="test"):
         return json.loads((self.results / experiment / "manifest.json").read_text())
 
+    def test_main_matrix_has_canonical_cardinality_and_unique_ids(self):
+        config = {
+            "effective": {"process_count": 1000, "context_switch_cost": 1, "rr_quantum": 4},
+            "scenarios": list(RUNNER_API["SCENARIOS"]),
+            "seeds": {"first": 1, "last": 100},
+            "algorithms": list(RUNNER_API["ALGORITHMS"]),
+        }
+        workloads, runs = RUNNER_API["matrix_specs"](config)
+        self.assertEqual(400, len(workloads))
+        self.assertEqual(1600, len(runs))
+        self.assertEqual(1600, len({run["run_id"] for run in runs}))
+
     def test_matrix_hashes_and_safe_resume(self):
         self.invoke()
         manifest = self.manifest()
@@ -51,10 +65,24 @@ class ExperimentRunnerTests(unittest.TestCase):
                       if (run["scenario"], run["seed"]) ==
                       (workload["scenario"], workload["seed"])}
             self.assertEqual({workload["workload_sha256"]}, hashes)
+        manifest_path = self.results / "test" / "manifest.json"
+        preserved_finished_at = "2000-01-01T00:00:00+00:00"
+        manifest["finished_at"] = preserved_finished_at
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         self.invoke()
-        self.assertEqual([1] * 8, [run["attempts"] for run in self.manifest()["runs"]])
+        resumed = self.manifest()
+        self.assertEqual([1] * 8, [run["attempts"] for run in resumed["runs"]])
+        self.assertEqual(preserved_finished_at, resumed["finished_at"])
+        before_verify = manifest_path.read_bytes()
         verified = self.invoke(extra=("--verify-only",))
         self.assertIn("8/8 resultados", verified.stdout)
+        self.assertEqual(before_verify, manifest_path.read_bytes())
+
+    def test_verify_only_does_not_create_missing_experiment(self):
+        verified = self.invoke(experiment="missing", extra=("--verify-only",), success=False)
+        self.assertEqual(2, verified.returncode)
+        self.assertIn("manifesto ausente", verified.stderr)
+        self.assertFalse((self.results / "missing").exists())
 
     def test_partial_duplicate_and_hash_corruption_are_reexecuted(self):
         self.invoke()
@@ -66,17 +94,21 @@ class ExperimentRunnerTests(unittest.TestCase):
         with paths[2].open("a", encoding="utf-8") as stream:
             stream.write("corruption\n")
         self.invoke()
-        attempts = [run["attempts"] for run in self.manifest()["runs"]]
+        resumed = self.manifest()
+        attempts = [run["attempts"] for run in resumed["runs"]]
         self.assertEqual([2, 2, 2, 1, 1, 1, 1, 1], attempts)
+        self.assertTrue(all(resumed["runs"][index]["reexecutions"] for index in range(3)))
         self.invoke(extra=("--verify-only",))
 
         workload = self.results / "test" / self.manifest()["workloads"][1]["path"]
         with workload.open("a", encoding="utf-8") as stream:
             stream.write("corruption\n")
         self.invoke()
-        attempts = [run["attempts"] for run in self.manifest()["runs"]]
+        resumed = self.manifest()
+        attempts = [run["attempts"] for run in resumed["runs"]]
         # A carga e regenerada de forma identica; so o FCFS que a publica precisa rodar.
         self.assertEqual([2, 2, 2, 1, 2, 1, 1, 1], attempts)
+        self.assertIn("workload invalido", resumed["runs"][4]["reexecutions"][-1]["reason"])
         self.invoke(extra=("--verify-only",))
 
     def test_identity_changes_and_duplicate_manifest_are_rejected(self):
@@ -90,6 +122,16 @@ class ExperimentRunnerTests(unittest.TestCase):
         manifest["runs"].append(dict(manifest["runs"][0]))
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         self.assertEqual(2, self.invoke(success=False).returncode)
+
+    def test_canonical_run_fields_are_not_trusted_from_manifest(self):
+        self.invoke()
+        manifest_path = self.results / "test" / "manifest.json"
+        manifest = self.manifest()
+        manifest["runs"][0]["run_id"] = "tampered-run-id"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        rejected = self.invoke(extra=("--verify-only",), success=False)
+        self.assertEqual(2, rejected.returncode)
+        self.assertIn("run_id incompativel", rejected.stderr)
 
     def test_failure_is_recorded_and_resume_retries_only_missing(self):
         wrapper = self.root / "simulator-wrapper.py"

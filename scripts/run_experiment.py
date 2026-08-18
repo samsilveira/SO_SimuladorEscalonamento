@@ -150,8 +150,7 @@ def identity(args: argparse.Namespace, repo: Path, binary: Path, config: Path,
     }
 
 
-def create_manifest(experiment_id: str, identity_value: dict, root: Path) -> dict:
-    config = identity_value["config"]
+def matrix_specs(config: dict) -> tuple[list[dict], list[dict]]:
     workloads = []
     runs = []
     effective = config["effective"]
@@ -160,21 +159,34 @@ def create_manifest(experiment_id: str, identity_value: dict, root: Path) -> dic
             workloads.append({
                 "scenario": scenario, "seed": seed,
                 "path": f"workloads/{scenario}_seed_{seed}.csv",
-                "workload_sha256": None, "status": "pending",
             })
             for algorithm in config["algorithms"]:
                 runs.append({
                     "run_id": f"{scenario}-{algorithm}-seed-{seed}",
                     "scenario": scenario, "seed": seed, "algorithm": algorithm,
-                    "workload_sha256": None,
                     "result_path": f"runs/{scenario}_{algorithm}_seed_{seed}.csv",
-                    "result_sha256": None, "status": "pending", "attempts": 0,
-                    "started_at": None, "finished_at": None, "command": None,
-                    "failures": [],
                     "process_count": effective["process_count"],
                     "context_switch_cost": effective["context_switch_cost"],
                     "rr_quantum": effective["rr_quantum"],
                 })
+    return workloads, runs
+
+
+def create_manifest(experiment_id: str, identity_value: dict) -> dict:
+    workloads_specs, runs_specs = matrix_specs(identity_value["config"])
+    workloads = [
+        {**spec, "workload_sha256": None, "status": "pending"}
+        for spec in workloads_specs
+    ]
+    runs = [
+        {
+            **spec, "workload_sha256": None, "result_sha256": None,
+            "status": "pending", "attempts": 0,
+            "started_at": None, "finished_at": None, "command": None,
+            "failures": [], "reexecutions": [],
+        }
+        for spec in runs_specs
+    ]
     return {
         "schema_version": SCHEMA_VERSION, "experiment_id": experiment_id,
         **identity_value, "started_at": now(), "finished_at": None,
@@ -192,29 +204,57 @@ def ensure_compatible(manifest: dict, experiment_id: str, expected: dict) -> Non
             raise ExperimentError(
                 f"identidade incompativel ({key}); use outro --experiment-id para nao misturar experimentos"
             )
-    config = expected["config"]
-    workload_keys = [(item.get("scenario"), item.get("seed"))
-                     for item in manifest.get("workloads", [])]
-    run_keys = [(item.get("scenario"), item.get("seed"), item.get("algorithm"))
-                for item in manifest.get("runs", [])]
-    expected_workloads = [
-        (scenario, seed) for scenario in config["scenarios"]
-        for seed in range(config["seeds"]["first"], config["seeds"]["last"] + 1)
-    ]
-    expected_runs = [(scenario, seed, algorithm) for scenario, seed in expected_workloads
-                     for algorithm in config["algorithms"]]
-    if workload_keys != expected_workloads or len(set(workload_keys)) != len(workload_keys):
+    expected_workloads, expected_runs = matrix_specs(expected["config"])
+    actual_workloads = manifest.get("workloads")
+    actual_runs = manifest.get("runs")
+    if not isinstance(actual_workloads, list) or len(actual_workloads) != len(expected_workloads):
         raise ExperimentError("matriz de workloads ausente, duplicada ou fora de ordem no manifesto")
-    if run_keys != expected_runs or len(set(run_keys)) != len(run_keys):
+    if not isinstance(actual_runs, list) or len(actual_runs) != len(expected_runs):
         raise ExperimentError("matriz de execucoes ausente, duplicada ou fora de ordem no manifesto")
+
+    for index, (actual, canonical) in enumerate(zip(actual_workloads, expected_workloads)):
+        if not isinstance(actual, dict):
+            raise ExperimentError(f"workload {index} invalido no manifesto")
+        for field, value in canonical.items():
+            if actual.get(field) != value:
+                raise ExperimentError(f"workload {index} possui campo {field} incompativel")
+        if actual.get("status") not in ("pending", "success"):
+            raise ExperimentError(f"workload {index} possui estado invalido")
+
+    for index, (actual, canonical) in enumerate(zip(actual_runs, expected_runs)):
+        if not isinstance(actual, dict):
+            raise ExperimentError(f"execucao {index} invalida no manifesto")
+        for field, value in canonical.items():
+            if actual.get(field) != value:
+                raise ExperimentError(f"execucao {index} possui campo {field} incompativel")
+        if actual.get("status") not in ("pending", "running", "failed", "success"):
+            raise ExperimentError(f"execucao {index} possui estado invalido")
+        if not isinstance(actual.get("attempts"), int) or actual["attempts"] < 0:
+            raise ExperimentError(f"execucao {index} possui tentativas invalidas")
+        if not isinstance(actual.get("failures"), list):
+            raise ExperimentError(f"execucao {index} possui falhas invalidas")
+        actual.setdefault("reexecutions", [])
+        if not isinstance(actual["reexecutions"], list):
+            raise ExperimentError(f"execucao {index} possui reexecucoes invalidas")
+
+    summary = manifest.get("summary")
+    if (not isinstance(summary, dict)
+            or summary.get("expected_workloads") != len(expected_workloads)
+            or summary.get("expected_runs") != len(expected_runs)):
+        raise ExperimentError("resumo do manifesto incompativel com a matriz esperada")
 
 
 def update_summary(manifest: dict, root: Path) -> tuple[int, int]:
     valid_workloads = sum(workload_valid(root, item)[0] for item in manifest["workloads"])
     valid_runs = 0
-    for item in manifest["runs"]:
-        expected = dict(item)
-        if validate_result(root / item["result_path"], expected, item.get("result_sha256"))[0]:
+    _, canonical_runs = matrix_specs(manifest["config"])
+    for item, canonical in zip(manifest["runs"], canonical_runs):
+        expected = {
+            **canonical, "workload_sha256": item.get("workload_sha256"),
+            "status": item.get("status"),
+        }
+        if validate_result(root / canonical["result_path"], expected,
+                           item.get("result_sha256"))[0]:
             valid_runs += 1
     manifest["summary"].update(valid_workloads=valid_workloads, successful_runs=valid_runs)
     return valid_workloads, valid_runs
@@ -232,11 +272,15 @@ def execute(args: argparse.Namespace) -> int:
     scenarios = ("equilibrado",) if args.reduced else SCENARIOS
     first, last, count = (1, 2, 10) if args.reduced else (1, 100, 1000)
     root = (repo / args.results_dir / args.experiment_id).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "workloads").mkdir(exist_ok=True)
-    (root / "runs").mkdir(exist_ok=True)
     manifest_path = root / "manifest.json"
     current_identity = identity(args, repo, binary, config, scenarios, first, last, count)
+
+    if args.verify_only and not manifest_path.exists():
+        raise ExperimentError(f"manifesto ausente para verificacao: {manifest_path}")
+    if not args.verify_only:
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "workloads").mkdir(exist_ok=True)
+        (root / "runs").mkdir(exist_ok=True)
 
     if manifest_path.exists():
         try:
@@ -245,7 +289,7 @@ def execute(args: argparse.Namespace) -> int:
             raise ExperimentError(f"manifesto existente invalido: {error}") from error
         ensure_compatible(manifest, args.experiment_id, current_identity)
     else:
-        manifest = create_manifest(args.experiment_id, current_identity, root)
+        manifest = create_manifest(args.experiment_id, current_identity)
         atomic_json(manifest_path, manifest)
 
     if args.verify_only:
@@ -258,16 +302,18 @@ def execute(args: argparse.Namespace) -> int:
     run_by_key = {(item["scenario"], item["seed"], item["algorithm"]): item
                   for item in manifest["runs"]}
     failures = 0
+    attempted_any = False
     for workload_entry in manifest["workloads"]:
         scenario, seed = workload_entry["scenario"], workload_entry["seed"]
         workload_path = root / workload_entry["path"]
-        valid_workload, _ = workload_valid(root, workload_entry)
+        valid_workload, workload_reason = workload_valid(root, workload_entry)
         for algorithm in ALGORITHMS:
             run = run_by_key[(scenario, seed, algorithm)]
             run["workload_sha256"] = workload_entry.get("workload_sha256")
             valid_result = False
+            validation_reason = f"workload invalido: {workload_reason}"
             if valid_workload:
-                valid_result, _ = validate_result(
+                valid_result, validation_reason = validate_result(
                     root / run["result_path"], run, run.get("result_sha256")
                 )
             if valid_result:
@@ -285,7 +331,13 @@ def execute(args: argparse.Namespace) -> int:
             else:
                 command += ["--workload-input", str(workload_path)]
             command += ["--output", str(root / run["result_path"])]
+            if run["attempts"] > 0:
+                run["reexecutions"].append({
+                    "attempt": run["attempts"] + 1, "at": now(),
+                    "reason": validation_reason,
+                })
             run["attempts"] += 1
+            attempted_any = True
             run["started_at"] = now()
             run["finished_at"] = None
             run["command"] = shlex.join(command)
@@ -333,7 +385,11 @@ def execute(args: argparse.Namespace) -> int:
     expected_w = manifest["summary"]["expected_workloads"]
     expected_r = manifest["summary"]["expected_runs"]
     complete = workloads == expected_w and runs == expected_r
-    manifest["finished_at"] = now() if complete else None
+    if complete:
+        if manifest.get("finished_at") is None or attempted_any:
+            manifest["finished_at"] = now()
+    else:
+        manifest["finished_at"] = None
     atomic_json(manifest_path, manifest)
     print(f"Experimento {args.experiment_id}: {workloads}/{expected_w} workloads; "
           f"{runs}/{expected_r} resultados validos")
