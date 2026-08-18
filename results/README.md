@@ -33,3 +33,17 @@ retomada.
 
 Resultados estatísticos pequenos e revisados pertencem a `consolidated/`; gráficos
 finais pertencem a `figures/`.
+
+## Consolidacao estatistica
+
+Depois que `results/raw/main/manifest.json` registrar as 1.600 execucoes validas,
+regenere todos os artefatos com um comando:
+
+```sh
+make graphs
+```
+
+O Make cria `.venv/` quando necessario, instala nela a dependencia direta fixada em `requirements-analysis.txt` e executa o analisador com `.venv/bin/python`. O arquivo de controle da instalacao so e atualizado depois que o `pip` termina com sucesso; alterar o arquivo de requisitos provoca uma nova instalacao automaticamente.
+
+O comando revalida o manifesto, os hashes e cada CSV antes de publicar qualquer arquivo. Cada uma das 16 combinacoes de cenario e algoritmo deve conter exatamente as seeds 1 a 100; ausencias, duplicatas, `NaN`, infinito e valores impossiveis interrompem a consolidacao. O commit registrado tambem deve conter a implementacao do PDBH; lotes anteriores sao preservados, mas nao podem gerar resultados finais.
+Para analisar outro ID sem renomear seus dados, use `make graphs EXPERIMENT_ID=<id>`. A saida e `consolidated/summary.csv`, com media, desvio padrao amostral (`n - 1`) e IC95%, alem de tres PNGs a 300 DPI em `figures/`.
