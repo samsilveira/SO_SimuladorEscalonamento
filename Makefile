@@ -11,6 +11,7 @@ TARGET_RELEASE = $(BIN_DIR)/simulador
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 DEV_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/dev/%.o,$(SRCS))
 RELEASE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/release/%.o,$(SRCS))
+ANALYZE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/analyze/%.o,$(SRCS))
 
 CPPFLAGS = -I$(INC_DIR)
 WARNINGS = -Wall -Wextra -Werror
@@ -41,6 +42,10 @@ $(BUILD_DIR)/release/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(RELEASE_CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/analyze/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CSTD) $(WARNINGS) -fanalyzer -c $< -o $@
+
 test: dev
 	./$(TARGET_DEV) --self-test
 	sh tests/test_cli.sh ./$(TARGET_DEV)
@@ -61,8 +66,7 @@ batch-verify: release
 graphs:
 	@mkdir -p results/figures results/consolidated
 
-analyze:
-	$(CC) $(CPPFLAGS) $(CSTD) $(WARNINGS) -fanalyzer -fsyntax-only $(SRCS)
+analyze: $(ANALYZE_OBJS)
 
 compile_commands:
 	@if command -v bear >/dev/null 2>&1; then \
