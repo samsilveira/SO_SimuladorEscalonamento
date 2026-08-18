@@ -5,10 +5,12 @@ import json
 import os
 from pathlib import Path
 import runpy
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -29,11 +31,14 @@ class ExperimentRunnerTests(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
+    def command(self, experiment="test", binary=SIMULATOR, extra=()):
+        return [sys.executable, str(RUNNER), "--experiment-id", experiment,
+                "--binary", str(binary), "--config", str(self.config),
+                "--results-dir", str(self.results), "--reduced", *extra]
+
     def invoke(self, experiment="test", binary=SIMULATOR, extra=(), env=None, success=True):
-        command = [sys.executable, str(RUNNER), "--experiment-id", experiment,
-                   "--binary", str(binary), "--config", str(self.config),
-                   "--results-dir", str(self.results), "--reduced", *extra]
-        completed = subprocess.run(command, cwd=REPO, text=True, stdout=subprocess.PIPE,
+        completed = subprocess.run(self.command(experiment, binary, extra), cwd=REPO, text=True,
+                                   stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, env=env, check=False)
         if success and completed.returncode != 0:
             self.fail(f"executor falhou ({completed.returncode}): {completed.stderr}\n{completed.stdout}")
@@ -55,10 +60,14 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertEqual(1600, len({run["run_id"] for run in runs}))
 
     def test_matrix_hashes_and_safe_resume(self):
-        self.invoke()
+        first = self.invoke()
+        self.assertIn("[8/8]", first.stdout)
+        self.assertIn("ETA", first.stdout)
         manifest = self.manifest()
         self.assertEqual(2, len(manifest["workloads"]))
         self.assertEqual(8, len(manifest["runs"]))
+        self.assertEqual(2, manifest["summary"]["valid_workloads"])
+        self.assertEqual(8, manifest["summary"]["successful_runs"])
         self.assertEqual({1}, {run["attempts"] for run in manifest["runs"]})
         for workload in manifest["workloads"]:
             hashes = {run["workload_sha256"] for run in manifest["runs"]
@@ -161,6 +170,65 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertEqual("success", retried["status"])
         self.assertTrue(all(run["attempts"] == 1 for run in manifest["runs"]
                             if run["run_id"] != failed["run_id"]))
+
+    def test_sigint_is_persisted_and_summary_remains_incremental(self):
+        marker = self.root / "wrapper-ready"
+        wrapper = self.root / "interrupt-wrapper.py"
+        wrapper.write_text(
+            "#!/usr/bin/env python3\n"
+            "from pathlib import Path\n"
+            "import subprocess, sys, time\n"
+            "args=sys.argv[1:]\n"
+            "rid=args[args.index('--run-id')+1]\n"
+            f"marker=Path({str(marker)!r})\n"
+            "if rid == 'equilibrado-rr-seed-1' and "
+            "(not marker.exists() or marker.read_text(encoding='utf-8') != 'resume'):\n"
+            " marker.write_text('ready', encoding='utf-8')\n"
+            " time.sleep(30)\n"
+            f"sys.exit(subprocess.run([{str(SIMULATOR)!r}, *args]).returncode)\n",
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+        process = subprocess.Popen(
+            self.command(experiment="interrupt", binary=wrapper), cwd=REPO, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertTrue(marker.exists(), "wrapper nao iniciou a execucao interrompivel")
+            os.killpg(process.pid, signal.SIGINT)
+            stdout, stderr = process.communicate(timeout=10)
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate(timeout=5)
+
+        self.assertEqual(130, process.returncode)
+        self.assertIn("[1/8]", stdout)
+        self.assertIn("ETA", stdout)
+        self.assertIn("Interrompido com seguranca", stderr)
+        manifest = self.manifest("interrupt")
+        interrupted = next(run for run in manifest["runs"]
+                           if run["run_id"] == "equilibrado-rr-seed-1")
+        self.assertEqual("interrupted", interrupted["status"])
+        self.assertIsNotNone(interrupted["finished_at"])
+        self.assertEqual(130, interrupted["failures"][-1]["exit_code"])
+        self.assertEqual(1, manifest["summary"]["valid_workloads"])
+        self.assertEqual(1, manifest["summary"]["successful_runs"])
+
+        marker.write_text("resume", encoding="utf-8")
+        resumed_output = self.invoke(experiment="interrupt", binary=wrapper)
+        self.assertIn("iniciando em 1/8", resumed_output.stdout)
+        self.assertIn("[8/8]", resumed_output.stdout)
+        resumed = self.manifest("interrupt")
+        retried = next(run for run in resumed["runs"]
+                       if run["run_id"] == "equilibrado-rr-seed-1")
+        self.assertEqual(2, retried["attempts"])
+        self.assertEqual("success", retried["status"])
+        self.assertEqual(2, resumed["summary"]["valid_workloads"])
+        self.assertEqual(8, resumed["summary"]["successful_runs"])
 
 
 if __name__ == "__main__":

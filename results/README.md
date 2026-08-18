@@ -26,5 +26,10 @@ hashes SHA-256, comandos, horários, tentativas, falhas e causas de reexecução
 arquivos entre experimentos: alterações de commit, binário ou configuração exigem
 outro identificador.
 
+O resumo é atualizado durante o lote. Uma interrupção por `Ctrl+C` marca a tentativa
+corrente como `interrupted`; execute novamente com o mesmo `experiment_id` para retomar
+sem substituir resultados válidos. `make clean` remove `raw/` e não deve anteceder uma
+retomada.
+
 Resultados estatísticos pequenos e revisados pertencem a `consolidated/`; gráficos
 finais pertencem a `figures/`.

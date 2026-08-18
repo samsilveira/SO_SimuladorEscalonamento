@@ -13,6 +13,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 
@@ -227,7 +228,7 @@ def ensure_compatible(manifest: dict, experiment_id: str, expected: dict) -> Non
         for field, value in canonical.items():
             if actual.get(field) != value:
                 raise ExperimentError(f"execucao {index} possui campo {field} incompativel")
-        if actual.get("status") not in ("pending", "running", "failed", "success"):
+        if actual.get("status") not in ("pending", "running", "interrupted", "failed", "success"):
             raise ExperimentError(f"execucao {index} possui estado invalido")
         if not isinstance(actual.get("attempts"), int) or actual["attempts"] < 0:
             raise ExperimentError(f"execucao {index} possui tentativas invalidas")
@@ -244,20 +245,66 @@ def ensure_compatible(manifest: dict, experiment_id: str, expected: dict) -> Non
         raise ExperimentError("resumo do manifesto incompativel com a matriz esperada")
 
 
-def update_summary(manifest: dict, root: Path) -> tuple[int, int]:
-    valid_workloads = sum(workload_valid(root, item)[0] for item in manifest["workloads"])
-    valid_runs = 0
+def validated_artifacts(manifest: dict, root: Path) -> tuple[set[tuple], set[tuple]]:
+    valid_workloads = set()
+    workload_by_key = {}
+    for item in manifest["workloads"]:
+        key = (item["scenario"], item["seed"])
+        workload_by_key[key] = item
+        if workload_valid(root, item)[0]:
+            valid_workloads.add(key)
+
+    valid_runs = set()
     _, canonical_runs = matrix_specs(manifest["config"])
     for item, canonical in zip(manifest["runs"], canonical_runs):
+        workload_key = (canonical["scenario"], canonical["seed"])
+        workload_hash = workload_by_key[workload_key].get("workload_sha256")
         expected = {
-            **canonical, "workload_sha256": item.get("workload_sha256"),
+            **canonical, "workload_sha256": workload_hash,
             "status": item.get("status"),
         }
-        if validate_result(root / canonical["result_path"], expected,
-                           item.get("result_sha256"))[0]:
-            valid_runs += 1
-    manifest["summary"].update(valid_workloads=valid_workloads, successful_runs=valid_runs)
+        run_key = (canonical["scenario"], canonical["seed"], canonical["algorithm"])
+        if (workload_key in valid_workloads
+                and item.get("workload_sha256") == workload_hash
+                and validate_result(root / canonical["result_path"], expected,
+                                    item.get("result_sha256"))[0]):
+            valid_runs.add(run_key)
     return valid_workloads, valid_runs
+
+
+def update_summary(manifest: dict, valid_workloads: set[tuple],
+                   valid_runs: set[tuple]) -> tuple[int, int]:
+    workload_count = len(valid_workloads)
+    run_count = len(valid_runs)
+    manifest["summary"].update(valid_workloads=workload_count, successful_runs=run_count)
+    return workload_count, run_count
+
+
+def format_duration(seconds: float | None) -> str:
+    if seconds is None:
+        return "--:--"
+    total = max(0, int(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def report_progress(run_id: str, status: str, valid_workloads: set[tuple],
+                    valid_runs: set[tuple], expected_workloads: int,
+                    expected_runs: int, started: float, session_attempts: int) -> None:
+    elapsed = time.monotonic() - started
+    remaining = max(0, expected_runs - len(valid_runs))
+    eta = None
+    if session_attempts > 0 and elapsed > 0:
+        eta = remaining / (session_attempts / elapsed)
+    print(
+        f"[{len(valid_runs)}/{expected_runs}] {run_id}: {status} | "
+        f"workloads {len(valid_workloads)}/{expected_workloads} | "
+        f"decorrido {format_duration(elapsed)} | ETA {format_duration(eta)}",
+        flush=True,
+    )
 
 
 def execute(args: argparse.Namespace) -> int:
@@ -293,11 +340,25 @@ def execute(args: argparse.Namespace) -> int:
         atomic_json(manifest_path, manifest)
 
     if args.verify_only:
-        workloads, runs = update_summary(manifest, root)
+        valid_workloads, valid_runs = validated_artifacts(manifest, root)
+        workloads, runs = update_summary(manifest, valid_workloads, valid_runs)
         expected_w = manifest["summary"]["expected_workloads"]
         expected_r = manifest["summary"]["expected_runs"]
         print(f"Verificacao: {workloads}/{expected_w} workloads; {runs}/{expected_r} resultados validos")
         return 0 if (workloads, runs) == (expected_w, expected_r) else 1
+
+    valid_workloads, valid_runs = validated_artifacts(manifest, root)
+    workloads, runs = update_summary(manifest, valid_workloads, valid_runs)
+    expected_w = manifest["summary"]["expected_workloads"]
+    expected_r = manifest["summary"]["expected_runs"]
+    atomic_json(manifest_path, manifest)
+    progress_started = time.monotonic()
+    session_attempts = 0
+    print(
+        f"Experimento {args.experiment_id}: iniciando em {runs}/{expected_r} resultados validos; "
+        f"{workloads}/{expected_w} workloads. Para interromper com retomada segura, use Ctrl+C.",
+        flush=True,
+    )
 
     run_by_key = {(item["scenario"], item["seed"], item["algorithm"]): item
                   for item in manifest["runs"]}
@@ -305,9 +366,15 @@ def execute(args: argparse.Namespace) -> int:
     attempted_any = False
     for workload_entry in manifest["workloads"]:
         scenario, seed = workload_entry["scenario"], workload_entry["seed"]
+        workload_key = (scenario, seed)
         workload_path = root / workload_entry["path"]
         valid_workload, workload_reason = workload_valid(root, workload_entry)
+        if valid_workload:
+            valid_workloads.add(workload_key)
+        else:
+            valid_workloads.discard(workload_key)
         for algorithm in ALGORITHMS:
+            run_key = (scenario, seed, algorithm)
             run = run_by_key[(scenario, seed, algorithm)]
             run["workload_sha256"] = workload_entry.get("workload_sha256")
             valid_result = False
@@ -318,7 +385,14 @@ def execute(args: argparse.Namespace) -> int:
                 )
             if valid_result:
                 run["status"] = "success"
+                if run_key not in valid_runs:
+                    valid_runs.add(run_key)
+                    update_summary(manifest, valid_workloads, valid_runs)
+                    atomic_json(manifest_path, manifest)
+                    report_progress(run["run_id"], "revalidado", valid_workloads, valid_runs,
+                                    expected_w, expected_r, progress_started, session_attempts)
                 continue
+            valid_runs.discard(run_key)
 
             command = [str(binary), "--config", str(config), "--scenario", scenario,
                        "--seed", str(seed), "--processes", str(count),
@@ -337,14 +411,34 @@ def execute(args: argparse.Namespace) -> int:
                     "reason": validation_reason,
                 })
             run["attempts"] += 1
+            session_attempts += 1
             attempted_any = True
             run["started_at"] = now()
             run["finished_at"] = None
             run["command"] = shlex.join(command)
             run["status"] = "running"
+            update_summary(manifest, valid_workloads, valid_runs)
             atomic_json(manifest_path, manifest)
-            completed = subprocess.run(command, cwd=repo, text=True, stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE, check=False)
+            try:
+                completed = subprocess.run(command, cwd=repo, text=True, stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, check=False)
+            except KeyboardInterrupt:
+                run["finished_at"] = now()
+                run["status"] = "interrupted"
+                run["failures"].append({
+                    "attempt": run["attempts"], "at": now(), "exit_code": 130,
+                    "message": "execucao interrompida pelo usuario",
+                })
+                manifest["finished_at"] = None
+                update_summary(manifest, valid_workloads, valid_runs)
+                atomic_json(manifest_path, manifest)
+                report_progress(run["run_id"], "interrompido", valid_workloads, valid_runs,
+                                expected_w, expected_r, progress_started, session_attempts)
+                print(
+                    "Interrompido com seguranca. Execute novamente sem 'make clean' para retomar.",
+                    file=sys.stderr, flush=True,
+                )
+                return 130
             run["finished_at"] = now()
             if completed.returncode != 0:
                 message = (completed.stderr or completed.stdout or "falha sem mensagem").strip()
@@ -352,7 +446,10 @@ def execute(args: argparse.Namespace) -> int:
                 run["failures"].append({"attempt": run["attempts"], "at": now(),
                                         "exit_code": completed.returncode, "message": message[-4000:]})
                 failures += 1
+                update_summary(manifest, valid_workloads, valid_runs)
                 atomic_json(manifest_path, manifest)
+                report_progress(run["run_id"], "falhou", valid_workloads, valid_runs,
+                                expected_w, expected_r, progress_started, session_attempts)
                 break
 
             if not valid_workload:
@@ -361,11 +458,15 @@ def execute(args: argparse.Namespace) -> int:
                     run["failures"].append({"attempt": run["attempts"], "at": now(),
                                             "exit_code": 0, "message": "workload nao foi publicado"})
                     failures += 1
+                    update_summary(manifest, valid_workloads, valid_runs)
                     atomic_json(manifest_path, manifest)
+                    report_progress(run["run_id"], "falhou", valid_workloads, valid_runs,
+                                    expected_w, expected_r, progress_started, session_attempts)
                     break
                 workload_entry["workload_sha256"] = sha256(workload_path)
                 workload_entry["status"] = "success"
                 valid_workload = True
+                valid_workloads.add(workload_key)
                 run["workload_sha256"] = workload_entry["workload_sha256"]
 
             result_path = root / run["result_path"]
@@ -377,13 +478,17 @@ def execute(args: argparse.Namespace) -> int:
                 run["failures"].append({"attempt": run["attempts"], "at": now(),
                                         "exit_code": 0, "message": reason})
                 failures += 1
+                valid_runs.discard(run_key)
             else:
                 run["status"] = "success"
+                valid_runs.add(run_key)
+            update_summary(manifest, valid_workloads, valid_runs)
             atomic_json(manifest_path, manifest)
+            report_progress(run["run_id"], run["status"], valid_workloads, valid_runs,
+                            expected_w, expected_r, progress_started, session_attempts)
 
-    workloads, runs = update_summary(manifest, root)
-    expected_w = manifest["summary"]["expected_workloads"]
-    expected_r = manifest["summary"]["expected_runs"]
+    valid_workloads, valid_runs = validated_artifacts(manifest, root)
+    workloads, runs = update_summary(manifest, valid_workloads, valid_runs)
     complete = workloads == expected_w and runs == expected_r
     if complete:
         if manifest.get("finished_at") is None or attempted_any:
@@ -392,7 +497,7 @@ def execute(args: argparse.Namespace) -> int:
         manifest["finished_at"] = None
     atomic_json(manifest_path, manifest)
     print(f"Experimento {args.experiment_id}: {workloads}/{expected_w} workloads; "
-          f"{runs}/{expected_r} resultados validos")
+          f"{runs}/{expected_r} resultados validos", flush=True)
     return 0 if complete and failures == 0 else 1
 
 
@@ -417,6 +522,9 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     try:
         sys.exit(execute(parse_args()))
+    except KeyboardInterrupt:
+        print("Interrompido pelo usuario.", file=sys.stderr, flush=True)
+        sys.exit(130)
     except (ExperimentError, OSError, ValueError) as error:
         print(f"Erro: {error}", file=sys.stderr)
         sys.exit(2)

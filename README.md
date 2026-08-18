@@ -148,6 +148,12 @@ Os artefatos ficam em `results/raw/<experiment-id>/{manifest.json,workloads,runs
 Uma segunda chamada com os mesmos argumentos retoma o experimento e executa somente
 itens ausentes ou inválidos. Commit, tag, hash do executável, configuração efetiva e
 matriz precisam coincidir; em caso de mudança, escolha um novo `--experiment-id`.
+Durante o lote, o terminal mostra resultados e workloads válidos, tempo decorrido e
+ETA; o resumo do manifesto é atualizado após cada tentativa.
+
+`Ctrl+C` registra a execução corrente como `interrupted` e preserva o progresso. Para
+retomar o lote principal, execute apenas `make batch`. Não use `make clean` antes da
+retomada, pois esse alvo remove todo o diretório `results/raw`.
 
 Para uma validação local/CI rápida, usando exatamente o mesmo fluxo:
 
