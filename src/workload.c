@@ -28,6 +28,7 @@ int workload_is_valid_algorithm(const char *algorithm) {
     if (strcmp(algorithm, "fcfs") == 0) return 1;
     if (strcmp(algorithm, "rr") == 0) return 1;
     if (strcmp(algorithm, "prioridade") == 0) return 1;
+    if (strcmp(algorithm, "sjf") == 0) return 1;
     if (strcmp(algorithm, "proprio") == 0) return 1;
     return 0;
 }
