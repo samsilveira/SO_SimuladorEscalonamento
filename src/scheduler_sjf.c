@@ -53,10 +53,15 @@ static SjfProcessState *get_state(SjfContext *ctx, int pid) {
     return &ctx->states[pid];
 }
 
+#define EPSILON 1e-9
+
 static int precedes(double expected_burst, const SchedulerProcessView *process,
                     double other_expected_burst, const SchedulerProcessView *other_process) {
-    if (expected_burst != other_expected_burst) {
-        return expected_burst < other_expected_burst;
+    if (expected_burst < other_expected_burst - EPSILON) {
+        return 1;
+    }
+    if (expected_burst > other_expected_burst + EPSILON) {
+        return 0;
     }
     if (process->ready_since != other_process->ready_since) {
         return process->ready_since < other_process->ready_since;
@@ -80,7 +85,9 @@ static int enqueue_internal(SjfContext *context, const SchedulerProcessView *pro
     
     if (update_estimate) {
         int64_t tn = process->cpu_consumed - state->last_cpu_consumed;
-        state->tau = ALPHA * (double)tn + (1.0 - ALPHA) * state->tau;
+        if (tn > 0) {
+            state->tau = ALPHA * (double)tn + (1.0 - ALPHA) * state->tau;
+        }
         state->last_cpu_consumed = process->cpu_consumed;
     }
     
@@ -119,7 +126,15 @@ static int on_preempted(void *opaque, const SchedulerProcessView *process) {
 }
 
 static int on_finish(void *opaque, int pid) {
-    return opaque != NULL && pid > 0;
+    SjfContext *context = (SjfContext *)opaque;
+
+    if (context == NULL || pid <= 0) return 0;
+    if (pid < context->states_capacity) {
+        context->states[pid].pid = 0;
+        context->states[pid].last_cpu_consumed = 0;
+        context->states[pid].tau = INITIAL_TAU;
+    }
+    return 1;
 }
 
 static SchedulerSelectResult select_next(void *opaque, int64_t current_time,
