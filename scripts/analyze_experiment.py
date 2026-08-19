@@ -508,7 +508,7 @@ def execute(args: argparse.Namespace) -> list[Path]:
 if __name__ == "__main__":
     try:
         generated = execute(parse_args())
-        print("Consolidacao concluida: 1600 observacoes validas, 48 linhas estatisticas.")
+        print("Consolidacao concluida: 2000 observacoes validas, 60 linhas estatisticas.")
         for generated_path in generated:
             print(generated_path)
     except (AnalysisError, OSError, ValueError) as error:

@@ -76,7 +76,7 @@ class EvidencePackageTests(unittest.TestCase):
                 "binary_sha256": "a" * 64,
                 "started_at": "2026-08-19T00:00:00+00:00",
                 "finished_at": "2026-08-19T00:01:00+00:00",
-                "summary": {"valid_workloads": 400, "successful_runs": 1600},
+                "summary": {"valid_workloads": 400, "successful_runs": 2000},
             }
             first = API["build_record"](
                 manifest, "experiment-v1", "b" * 40, "d" * 64, archive, snapshot,
