@@ -2,7 +2,7 @@
 
 | Integrante | Issues lideradas | Contribuições relevantes |
 | :--- | :--- | :--- |
-| Elder Rayan Oliveira Silva (@eldrayan) | #3, #4, #17 | Setup do template do artigo em TeX (#3) e implementação de processos, estados e filas (#4). Finalização do artigo e validação (#17) |
+| Elder Rayan Oliveira Silva (@eldrayan) | #3, #4, #17, #21 | Setup do template do artigo em TeX (#3), processos, estados e filas (#4). Finalização do artigo (#17). Algoritmo SJF (#21) |
 | Espedito Ramom Mascena Ricarto (@RamomRicarto) | #10 | Gerador pseudoaleatório (RNG), validação de CLI, geração de carga de trabalho e exportação CSV (#10) |
 | Manoel Junio Duarte da Silva (@Junio404) | #2, #5 | Estrutura inicial, Makefile, CI, templates, regras de contribuição (#2), motor de simulação por eventos e escalonadores (#5). Revisão (#17) |
 | Pedro Yan Alcantara Palácio (@pedropalacioo) | #7, #8 | Implementação da interface comum de escalonadores, FCFS, Round Robin e Prioridade não preemptiva (#7, #8) |

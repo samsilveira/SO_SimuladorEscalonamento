@@ -8,7 +8,7 @@ Este projeto consiste em um simulador de escalonamento de processos desenvolvido
 
 | Nome | GitHub | Contribuições Resumidas |
 | --- | --- | --- |
-| Elder Rayan Oliveira Silva | @eldrayan | Setup do template do artigo em TeX, processos, filas e finalização do artigo |
+| Elder Rayan Oliveira Silva | @eldrayan | Setup do template TeX, processos, filas, finalização do artigo e implementação do algoritmo SJF |
 | Espedito Ramom Mascena Ricarto | @RamomRicarto | Gerador pseudoaleatório (RNG), validação de CLI, geração de carga de trabalho e exportação CSV |
 | Manoel Junio Duarte da Silva | @Junio404 | Estrutura inicial, Makefile, motor de simulação por eventos e escalonadores |
 | Pedro Yan Alcantara Palácio | @pedropalacioo | Interface comum de escalonadores, FCFS, Round Robin e Prioridade |
