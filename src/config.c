@@ -231,7 +231,7 @@ static void print_help(const char *program) {
     printf("\nConfiguracao e simulacao:\n");
     printf("  --config ARQUIVO         Carrega configuracao chave=valor\n");
     printf("  --scenario NOME          equilibrado, io_bound, cpu_bound ou prioridades_desbalanceadas\n");
-    printf("  --algorithm NOME         fcfs, rr, prioridade ou proprio\n");
+    printf("  --algorithm NOME         fcfs, rr, prioridade, sjf ou proprio\n");
     printf("  --seed N                 Seed de 64 bits sem sinal\n");
     printf("  --processes N            Quantidade de processos (1 a 100000)\n");
     printf("  --context-switch-cost N  Custo da troca (0 a 1000000)\n");

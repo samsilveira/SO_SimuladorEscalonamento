@@ -19,7 +19,10 @@ from datetime import datetime, timezone
 
 SCHEMA_VERSION = 1
 SCENARIOS = ("equilibrado", "io_bound", "cpu_bound", "prioridades_desbalanceadas")
-ALGORITHMS = ("fcfs", "rr", "prioridade", "proprio")
+REQUIRED_ALGORITHMS = ("fcfs", "rr", "prioridade", "proprio")
+SJF_COMPARISON_ALGORITHMS = (*REQUIRED_ALGORITHMS, "sjf")
+# Compatibilidade com consumidores que importam a matriz obrigatoria.
+ALGORITHMS = REQUIRED_ALGORITHMS
 AGGREGATE_HEADER = (
     "schema_version", "run_id", "workload_sha256", "algorithm", "scenario", "seed",
     "process_count", "context_switch_cost", "rr_quantum", "makespan",
@@ -132,7 +135,8 @@ def workload_valid(root: Path, entry: dict) -> tuple[bool, str]:
 
 
 def identity(args: argparse.Namespace, repo: Path, binary: Path, config: Path,
-             scenarios: tuple[str, ...], first: int, last: int, count: int) -> dict:
+             scenarios: tuple[str, ...], first: int, last: int, count: int,
+             algorithms: tuple[str, ...]) -> dict:
     config_values = read_config(config)
     effective = {
         "process_count": count, "context_switch_cost": 1, "rr_quantum": 4,
@@ -147,7 +151,7 @@ def identity(args: argparse.Namespace, repo: Path, binary: Path, config: Path,
         "config": {
             "path": os.path.relpath(config, repo), "sha256": sha256(config),
             "effective": effective, "scenarios": list(scenarios),
-            "seeds": {"first": first, "last": last}, "algorithms": list(ALGORITHMS),
+            "seeds": {"first": first, "last": last}, "algorithms": list(algorithms),
         },
     }
 
@@ -327,9 +331,13 @@ def execute(args: argparse.Namespace) -> int:
         raise ExperimentError(f"configuracao ausente: {config}")
 
     scenarios, first, last, count = execution_shape(args.reduced, args.pilot)
+    algorithms = (SJF_COMPARISON_ALGORITHMS
+                  if args.include_sjf else REQUIRED_ALGORITHMS)
     root = (repo / args.results_dir / args.experiment_id).resolve()
     manifest_path = root / "manifest.json"
-    current_identity = identity(args, repo, binary, config, scenarios, first, last, count)
+    current_identity = identity(
+        args, repo, binary, config, scenarios, first, last, count, algorithms
+    )
 
     if args.verify_only and not manifest_path.exists():
         raise ExperimentError(f"manifesto ausente para verificacao: {manifest_path}")
@@ -382,7 +390,7 @@ def execute(args: argparse.Namespace) -> int:
             valid_workloads.add(workload_key)
         else:
             valid_workloads.discard(workload_key)
-        for algorithm in ALGORITHMS:
+        for algorithm in algorithms:
             run_key = (scenario, seed, algorithm)
             run = run_by_key[(scenario, seed, algorithm)]
             run["workload_sha256"] = workload_entry.get("workload_sha256")
@@ -522,6 +530,10 @@ def parse_args() -> argparse.Namespace:
                          help="executa 1 cenario x 2 seeds x 4 algoritmos x 10 processos")
     profile.add_argument("--pilot", action="store_true",
                          help="executa 4 cenarios x 10 seeds x 4 algoritmos x 1000 processos")
+    parser.add_argument(
+        "--include-sjf", action="store_true",
+        help="executa perfil comparativo separado com os 4 algoritmos obrigatorios e SJF",
+    )
     parser.add_argument("--verify-only", action="store_true",
                         help="valida completude sem executar nem alterar artefatos")
     parsed = parser.parse_args()

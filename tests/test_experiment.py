@@ -59,6 +59,40 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertEqual(1600, len(runs))
         self.assertEqual(1600, len({run["run_id"] for run in runs}))
 
+    def test_sjf_comparison_adds_runs_without_changing_required_matrix(self):
+        required = RUNNER_API["REQUIRED_ALGORITHMS"]
+        comparison = RUNNER_API["SJF_COMPARISON_ALGORITHMS"]
+        self.assertEqual((*required, "sjf"), comparison)
+
+        config = {
+            "effective": {"process_count": 1000, "context_switch_cost": 1, "rr_quantum": 4},
+            "scenarios": list(RUNNER_API["SCENARIOS"]),
+            "seeds": {"first": 1, "last": 100},
+            "algorithms": list(comparison),
+        }
+        workloads, runs = RUNNER_API["matrix_specs"](config)
+        self.assertEqual(400, len(workloads))
+        self.assertEqual(2000, len(runs))
+        self.assertEqual(2000, len({run["run_id"] for run in runs}))
+
+    def test_reduced_sjf_profile_reuses_each_workload_for_five_algorithms(self):
+        completed = self.invoke(experiment="sjf", extra=("--include-sjf",))
+        self.assertIn("[10/10]", completed.stdout)
+        manifest = self.manifest("sjf")
+        self.assertEqual(
+            list(RUNNER_API["SJF_COMPARISON_ALGORITHMS"]),
+            manifest["config"]["algorithms"],
+        )
+        self.assertEqual(2, manifest["summary"]["valid_workloads"])
+        self.assertEqual(10, manifest["summary"]["successful_runs"])
+        for workload in manifest["workloads"]:
+            hashes = {
+                run["workload_sha256"] for run in manifest["runs"]
+                if (run["scenario"], run["seed"])
+                == (workload["scenario"], workload["seed"])
+            }
+            self.assertEqual({workload["workload_sha256"]}, hashes)
+
     def test_execution_profiles_have_explicit_reproducible_shapes(self):
         shape = RUNNER_API["execution_shape"]
         self.assertEqual((RUNNER_API["SCENARIOS"], 1, 100, 1000), shape(False, False))
