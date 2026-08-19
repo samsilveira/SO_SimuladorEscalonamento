@@ -502,14 +502,47 @@ static ProcessQueue *make_contention_fixture(void) {
     return workload;
 }
 
+static int test_sjf_uses_completed_bursts_without_preempting(void) {
+    ProcessQueue *workload = queue_create(QUEUE_FUTURE, compare_arrival);
+    SimulationResult result = {0};
+    Process *p1 = make_process(1, 0, 0);
+    Process *p2 = make_process(2, 0, 0);
+    Process *p3 = make_process(3, 0, 0);
+
+    if (workload == NULL || p1 == NULL || p2 == NULL || p3 == NULL
+        || !process_add_burst(p1, 2, 10) || !process_add_burst(p1, 1, 0)
+        || !process_add_burst(p2, 8, 2) || !process_add_burst(p2, 1, 0)
+        || !process_add_burst(p3, 10, 0)
+        || !add_process(workload, p1) || !add_process(workload, p2)
+        || !add_process(workload, p3)) return 1;
+
+    if (!simulation_run(workload, "sjf", 0, 4, &result)) return 1;
+
+    if (result.makespan != 22
+        || !has_event(&result, 12, SIM_EVENT_IO_END, 1)
+        || !has_event(&result, 12, SIM_EVENT_IO_END, 2)
+        || has_event(&result, 12, SIM_EVENT_PREEMPT, 3)
+        || !has_event(&result, 20, SIM_EVENT_FINISH, 3)
+        || !has_event(&result, 20, SIM_EVENT_DISPATCH, 1)
+        || !has_event(&result, 21, SIM_EVENT_FINISH, 1)
+        || !has_event(&result, 21, SIM_EVENT_DISPATCH, 2)
+        || !has_event(&result, 22, SIM_EVENT_FINISH, 2)) {
+        simulation_result_destroy(&result);
+        return 1;
+    }
+
+    simulation_result_destroy(&result);
+    return 0;
+}
+
 static int test_all_algorithms_on_manual_fixtures(void) {
-    const char *algorithms[] = {"fcfs", "rr", "prioridade", "proprio"};
-    const int64_t contention_p1_completion[] = {4, 5, 5, 5};
-    const int64_t contention_p2_completion[] = {5, 3, 1, 1};
-    const uint64_t contention_switches[] = {1, 2, 1, 1};
+    const char *algorithms[] = {"fcfs", "rr", "prioridade", "proprio", "sjf"};
+    const int64_t contention_p1_completion[] = {4, 5, 5, 5, 4};
+    const int64_t contention_p2_completion[] = {5, 3, 1, 1, 5};
+    const uint64_t contention_switches[] = {1, 2, 1, 1, 1};
     int i;
 
-    for (i = 0; i < 4; i += 1) {
+    for (i = 0; i < 5; i += 1) {
         ProcessQueue *workload = make_io_fixture();
         SimulationResult result = {0};
         const ProcessMetrics *p1;
@@ -567,10 +600,10 @@ static int test_extreme_inputs(void) {
 }
 
 static int test_seeded_determinism(void) {
-    const char *algorithms[] = {"fcfs", "rr", "prioridade", "proprio"};
+    const char *algorithms[] = {"fcfs", "rr", "prioridade", "proprio", "sjf"};
     int i;
 
-    for (i = 0; i < 4; i += 1) {
+    for (i = 0; i < 5; i += 1) {
         ProcessQueue *workload1 = workload_generate(25, "equilibrado", 42);
         ProcessQueue *workload2 = workload_generate(25, "equilibrado", 42);
         SimulationResult result1 = {0};
@@ -669,6 +702,10 @@ int simulation_run_all_tests(void) {
     }
     if (test_invalid_empty_zero_ideal_and_overflow_inputs()) {
         fprintf(stderr, "test_invalid_empty_zero_ideal_and_overflow_inputs failed\n");
+        return 1;
+    }
+    if (test_sjf_uses_completed_bursts_without_preempting()) {
+        fprintf(stderr, "test_sjf_uses_completed_bursts_without_preempting failed\n");
         return 1;
     }
 

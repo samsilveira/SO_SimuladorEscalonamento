@@ -13,6 +13,7 @@ TARGET_DEV = $(BIN_DIR)/simulador_dev
 TARGET_RELEASE = $(BIN_DIR)/simulador
 EXPERIMENT_ID ?= main
 PILOT_ID ?= pilot
+SJF_EXPERIMENT_ID ?= sjf-comparison
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 DEV_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/dev/%.o,$(SRCS))
@@ -86,6 +87,15 @@ pilot-verify: release
 batch-verify: release
 	$(PYTHON) scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE) --verify-only
 
+batch-sjf: release
+	$(PYTHON) scripts/run_experiment.py --experiment-id $(SJF_EXPERIMENT_ID) --binary $(TARGET_RELEASE) --include-sjf
+
+batch-sjf-reduced: release
+	$(PYTHON) scripts/run_experiment.py --experiment-id $(SJF_EXPERIMENT_ID)-smoke --binary $(TARGET_RELEASE) --reduced --include-sjf
+
+batch-sjf-verify: release
+	$(PYTHON) scripts/run_experiment.py --experiment-id $(SJF_EXPERIMENT_ID) --binary $(TARGET_RELEASE) --include-sjf --verify-only
+
 graphs: analysis-deps
 	$(VENV_PYTHON) scripts/analyze_experiment.py \
 		--experiment-dir results/raw/$(EXPERIMENT_ID) \
@@ -121,4 +131,4 @@ compile_commands:
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR) results/raw
 
-.PHONY: all dev release analysis-deps test simulate batch batch-reduced pilot pilot-verify batch-verify graphs evidence evidence-verify analyze compile_commands clean
+.PHONY: all dev release analysis-deps test simulate batch batch-reduced pilot pilot-verify batch-verify batch-sjf batch-sjf-reduced batch-sjf-verify graphs evidence evidence-verify analyze compile_commands clean

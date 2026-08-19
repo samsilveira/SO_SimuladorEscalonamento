@@ -102,6 +102,48 @@ static int test_priority_order_and_non_preemption(void) {
     return 0;
 }
 
+static int test_sjf_initial_estimate_history_and_ties(void) {
+    Scheduler *sjf = scheduler_create("sjf", 4);
+    SchedulerProcessView p1 = view(1, 9, 0, 0);
+    SchedulerProcessView p2 = view(2, 0, 0, 1);
+    SchedulerProcessView p3 = view(3, 5, 0, 0);
+
+    if (sjf == NULL
+        || !scheduler_on_arrival(sjf, &p3)
+        || !scheduler_on_arrival(sjf, &p2)
+        || !scheduler_on_arrival(sjf, &p1)
+        || !expect_pid(sjf, 1)
+        || !expect_pid(sjf, 3)
+        || !expect_pid(sjf, 2)) return 1;
+
+    p1.ready_since = 20;
+    p2.ready_since = 20;
+    p3.ready_since = 20;
+    p1.cpu_consumed = 2; /* tau = 0,5 * 2 + 0,5 * 10 = 6 */
+    p2.cpu_consumed = 8; /* tau = 9 */
+    p3.cpu_consumed = 4; /* tau = 7 */
+    if (!scheduler_on_io_complete(sjf, &p2)
+        || !scheduler_on_io_complete(sjf, &p3)
+        || !scheduler_on_io_complete(sjf, &p1)
+        || scheduler_on_io_complete(sjf, &p1)
+        || !expect_pid(sjf, 1)
+        || !expect_pid(sjf, 3)
+        || !expect_pid(sjf, 2)) return 1;
+
+    p1.ready_since = 30;
+    p2.ready_since = 30;
+    p1.cpu_consumed = 6;  /* t_n = 4; tau = 5 */
+    p2.cpu_consumed = 10; /* t_n = 2; tau = 5,5 */
+    if (!scheduler_on_io_complete(sjf, &p2)
+        || !scheduler_on_io_complete(sjf, &p1)
+        || !expect_pid(sjf, 1)
+        || !expect_pid(sjf, 2)
+        || scheduler_should_preempt(sjf, 1000000)) return 1;
+
+    scheduler_destroy(sjf);
+    return 0;
+}
+
 static int test_own_policy_still_uses_common_contract(void) {
     Scheduler *own = scheduler_create("proprio", 4);
     SchedulerProcessView p1 = view(1, 7, 0, 0);
@@ -206,6 +248,10 @@ int scheduler_run_all_tests(void) {
     }
     if (test_priority_order_and_non_preemption()) {
         fprintf(stderr, "test_priority_order_and_non_preemption failed\n");
+        return 1;
+    }
+    if (test_sjf_initial_estimate_history_and_ties()) {
+        fprintf(stderr, "test_sjf_initial_estimate_history_and_ties failed\n");
         return 1;
     }
     if (test_own_policy_still_uses_common_contract()) {

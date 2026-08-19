@@ -8,6 +8,7 @@ Scheduler *scheduler_create(const char *name, int rr_quantum) {
     if (strcmp(name, "fcfs") == 0) return scheduler_fcfs_create();
     if (strcmp(name, "rr") == 0) return scheduler_rr_create(rr_quantum);
     if (strcmp(name, "prioridade") == 0) return scheduler_priority_create();
+    if (strcmp(name, "sjf") == 0) return scheduler_sjf_create();
     if (strcmp(name, "proprio") == 0) {
         return scheduler_pdbh_create();
     }
