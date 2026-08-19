@@ -46,10 +46,10 @@ Este artigo apresenta o desenvolvimento e a avaliação estatística de um simul
 Sistemas Operacionais, Escalonamento de Processos, Simulação.
 \end{IEEEkeywords}
 
-\section{Introdução}"
+\section{Introdução}
 O escalonamento de processos é uma das funções mais críticas de um Sistema Operacional, responsável por multiplexar o uso do processador (CPU) entre diversas tarefas concorrentes. A escolha da política de escalonamento afeta diretamente o desempenho percebido pelo usuário e a eficiência global do sistema, exigindo um equilíbrio constante entre métricas conflitantes, como a minimização do tempo de espera e a garantia de justiça (equidade) na alocação de recursos.
 
-Políticas clássicas apresentam comportamentos teóricos bem estabelecidos: abordagens baseadas em ordem de chegada (FCFS) são simples, mas vulneráveis ao efeito comboio; o fatiamento de tempo (\textit{Round Robin}) promove justiça à custa de frequentes trocas de contexto; e algoritmos baseados em prioridade estática otimizam a execução de tarefas críticas, mas introduzem o risco crônico de inanição (\textit{starvation}) para processos menos favorecidos.
+Políticas clássicas apresentam comportamentos teóricos bem estabelecidos~\cite{silberschatz}: abordagens baseadas em ordem de chegada (FCFS) são simples, mas vulneráveis ao efeito comboio; o fatiamento de tempo (\textit{Round Robin}) promove justiça à custa de frequentes trocas de contexto; e algoritmos baseados em prioridade estática otimizam a execução de tarefas críticas, mas introduzem o risco crônico de inanição (\textit{starvation}) para processos menos favorecidos.
 
 Para analisar essas dinâmicas de forma empírica e reprodutível, este trabalho apresenta o desenvolvimento de um simulador de eventos discretos. Além de implementar as políticas clássicas, o projeto propõe e avalia a Prioridade Dinâmica Baseada em Histórico (PDBH), um algoritmo não preemptivo que visa mitigar a inanição através da aplicação de bônus por tempo de espera e penalidades por consumo acumulado de CPU.
 
