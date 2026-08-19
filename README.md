@@ -114,7 +114,7 @@ make test
 ## Simulação simples
 
 ```sh
-./bin/simulador --algo fcfs --scenario balanced --seed 42 --processes 100
+./bin/simulador --algorithm fcfs --scenario equilibrado --seed 42 --processes 100
 ```
 
 ## Lote completo
