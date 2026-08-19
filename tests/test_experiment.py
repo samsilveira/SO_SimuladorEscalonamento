@@ -59,11 +59,21 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertEqual(1600, len(runs))
         self.assertEqual(1600, len({run["run_id"] for run in runs}))
 
+    def test_execution_profiles_have_explicit_reproducible_shapes(self):
+        shape = RUNNER_API["execution_shape"]
+        self.assertEqual((RUNNER_API["SCENARIOS"], 1, 100, 1000), shape(False, False))
+        self.assertEqual((RUNNER_API["SCENARIOS"], 1, 10, 1000), shape(False, True))
+        self.assertEqual((("equilibrado",), 1, 2, 10), shape(True, False))
+
     def test_matrix_hashes_and_safe_resume(self):
         first = self.invoke()
         self.assertIn("[8/8]", first.stdout)
         self.assertIn("ETA", first.stdout)
         manifest = self.manifest()
+        self.assertEqual(
+            RUNNER_API["sha256"](RUNNER),
+            manifest["runner_sha256"],
+        )
         self.assertEqual(2, len(manifest["workloads"]))
         self.assertEqual(8, len(manifest["runs"]))
         self.assertEqual(2, manifest["summary"]["valid_workloads"])

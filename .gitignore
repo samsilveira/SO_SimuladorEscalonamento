@@ -56,10 +56,16 @@ dkms.conf
 
 graphify-out/*
 .venv/
+__pycache__/
+*.py[cod]
 .env
 build/
 bin/
 compile_commands.json
-results/raw/
+results/raw/*
+!results/raw/main/
+results/raw/main/*
+!results/raw/main/manifest.json
+results/evidence/*.tar.gz
 load.csv
 resultado.json
