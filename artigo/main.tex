@@ -8,6 +8,7 @@
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
+\usepackage{lmodern}
 
 \begin{document}
 
@@ -111,7 +112,25 @@ Para cada um dos quatro cenários, os quatro algoritmos (FCFS, RR, Prioridade e 
 As métricas coletadas incluem o Tempo de Retorno (\textit{Turnaround}) médio, o número total de Trocas de Contexto e o Índice de Jain aplicado ao Slowdown, utilizado para quantificar a equidade (justiça) da distribuição do tempo de resposta. A análise foi conduzida através do cálculo das médias acompanhadas do Intervalo de Confiança de 95\% (IC95\%), permitindo observar a sobreposição estatística entre os desempenhos.
 
 \section{Resultados}
-Esta seção apresenta os resultados obtidos nas simulações, consolidados a partir de 1.600 execuções. Para cada cenário, os dados são expressos pela média acompanhada do Intervalo de Confiança de 95\% (IC95\%).
+Esta seção apresenta os resultados obtidos nas simulações, consolidados a partir de 1.600 execuções. Para cada cenário, os dados são expressos pela média acompanhada do Intervalo de Confiança de 95\% (IC95\%). Os resultados consolidados podem ser observados na Figura \ref{fig:turnaround} (Turnaround Médio), Figura \ref{fig:jain} (Índice de Jain) e Figura \ref{fig:context} (Trocas de Contexto).
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{../results/figures/mean_turnaround_ic95.png}}
+\caption{Turnaround médio com IC95\% para todos os cenários (em ticks).}
+\label{fig:turnaround}
+\end{figure}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{../results/figures/jain_slowdown_pct_ic95.png}}
+\caption{Equidade (Índice de Jain do Slowdown) com IC95\% para todos os cenários (em \%).}
+\label{fig:jain}
+\end{figure}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{../results/figures/context_switches_ic95.png}}
+\caption{Trocas de Contexto com IC95\% para todos os cenários (em ocorrências).}
+\label{fig:context}
+\end{figure}
 
 \subsection{Cenário: Equilibrado}
 No cenário equilibrado, os resultados para a métrica de Turnaround Médio (em ticks) foram:
