@@ -2,9 +2,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage[brazilian]{babel}
-\usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
@@ -37,14 +35,12 @@
 \IEEEauthorblockA{\textit{UFCA - Universidade Federal do Cariri} \\ @SebastiaoSoares}
 }
 
-\maketitle
-
-\begin{abstract}
-Este artigo apresenta o desenvolvimento e a avaliação estatística de um simulador de escalonamento de processos para sistemas operacionais. Foram comparadas três políticas clássicas (FCFS, Round Robin e Prioridade) e uma abordagem customizada denominada Prioridade Dinâmica Baseada em Histórico (PDBH). Através da execução de 1.600 cargas de trabalho distribuídas em quatro cenários (Equilibrado, I/O-Bound, CPU-Bound e Desbalanceado), avaliou-se o \textit{trade-off} entre o Tempo de Retorno (\textit{Turnaround}) e a Equidade (Índice de Jain). Os resultados demonstram a severidade da inanição em políticas de prioridade estática, os altos custos de troca de contexto do Round Robin e a ineficácia de pontuações dinâmicas de histórico em arquiteturas estritamente não preemptivas, onde o PDBH apresentou equivalência estatística ao FCFS.
+\maketitle\begin{abstract}
+Este artigo apresenta o desenvolvimento e a avaliação estatística de um simulador de escalonamento de processos para sistemas operacionais. Foram comparadas três políticas clássicas (FCFS, Round Robin e Prioridade Estática), uma política adaptada (SJF Não-Preemptivo) e uma abordagem própria denominada Prioridade Dinâmica Baseada em Histórico (PDBH). Através da execução de 2.000 cargas de trabalho distribuídas em quatro cenários (Equilibrado, I/O-Bound, CPU-Bound e Desbalanceado), avaliou-se o \textit{trade-off} entre o Tempo de Retorno (\textit{Turnaround}), a Equidade (Índice de Jain) e o custo sistêmico (Trocas de Contexto). Os resultados demonstram o alto nível de inanição em políticas de prioridade estática e os altos custos de troca de contexto do Round Robin. Em relação ao algoritmo proposto (PDBH), os dados revelam que aplicar pontuações dinâmicas de histórico em arquiteturas estritamente não preemptivas não traz benefícios na prática, cenário no qual o algoritmo não obteve ganhos, apresentando resultados equivalentes ao FCFS em todas as métricas observadas.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Sistemas Operacionais, Escalonamento de Processos, Simulação.
+Sistemas Operacionais, Escalonamento de Processos, Simulação, Avaliação de Desempenho.
 \end{IEEEkeywords}
 
 \section{Introdução}
@@ -52,9 +48,9 @@ O escalonamento de processos é uma das funções mais críticas de um Sistema O
 
 Políticas clássicas apresentam comportamentos teóricos bem estabelecidos~\cite{silberschatz}: abordagens baseadas em ordem de chegada (FCFS) são simples, mas vulneráveis ao efeito comboio; o fatiamento de tempo (\textit{Round Robin}) promove justiça à custa de frequentes trocas de contexto; e algoritmos baseados em prioridade estática otimizam a execução de tarefas críticas, mas introduzem o risco crônico de inanição (\textit{starvation}) para processos menos favorecidos.
 
-Para analisar essas dinâmicas de forma empírica e reprodutível, este trabalho apresenta o desenvolvimento de um simulador de eventos discretos. Além de implementar as políticas clássicas, o projeto propõe e avalia a Prioridade Dinâmica Baseada em Histórico (PDBH), um algoritmo não preemptivo que visa mitigar a inanição através da aplicação de bônus por tempo de espera e penalidades por consumo acumulado de CPU.
+Para analisar essas dinâmicas de forma empírica e reprodutível, este trabalho apresenta o desenvolvimento de um simulador de eventos discretos. Além de implementar os algoritmos clássicos obrigatórios (FCFS, Round Robin, Prioridade Estática e SJF), o projeto propõe e avalia de forma aprofundada a Prioridade Dinâmica Baseada em Histórico (PDBH). Este algoritmo próprio, de natureza não preemptiva, visa mitigar a inanição por meio da aplicação de bônus atrelados ao tempo de espera e penalidades proporcionais ao consumo acumulado de CPU.
 
-Através de um rigoroso protocolo experimental com 1.600 execuções, este artigo avalia o desempenho estrutural e estatístico desses algoritmos sob quatro cenários distintos de carga de trabalho. O objetivo principal é quantificar os \textit{trade-offs} sistêmicos e investigar a eficácia mecânica da pontuação dinâmica (PDBH) em um ambiente não preemptivo.
+Através de um rigoroso protocolo experimental com 2.000 execuções, este artigo avalia o desempenho estrutural e estatístico desses algoritmos sob quatro cenários distintos de carga de trabalho. O objetivo principal é quantificar os \textit{trade-offs} sistêmicos e investigar criticamente o impacto, os custos introduzidos e a eficácia mecânica do algoritmo próprio (PDBH) em comparação às soluções clássicas.
 
 \section{Modelo da Simulação}
 Esta seção descreve o modelo arquitetural adotado pelo motor de simulação para representar o comportamento de um sistema operacional monoprocessado.
@@ -72,63 +68,61 @@ Quando um processo solicita uma operação de E/S, ele abandona a CPU e passa pa
 A troca de contexto impõe um custo fixo ao sistema. Quando a CPU é repassada para um processo com Identificador de Processo (PID) diferente do que estava em execução anteriormente, adiciona-se o custo de 1 \textit{tick} ao tempo total. O primeiro despacho da simulação não acarreta esse custo.
 
 \subsection{Informações observáveis pelos escalonadores}
-Para garantir a ausência de conhecimento futuro, os escalonadores tomam decisões baseadas exclusivamente no estado presente e passado. Nenhuma política tem acesso à duração de rajadas futuras, tempo restante de execução ou informações sobre processos que ainda não chegaram ao sistema.
+Para garantir a ausência de conhecimento futuro, os escalonadores tomam decisões baseadas exclusivamente no estado presente e passado. Nenhuma política tem acesso à duração de rajadas futuras, ao tempo restante de execução ou a informações sobre processos que ainda não chegaram ao sistema.
 
 \section{Algoritmos}
-% Limite sugerido: 1 página
 Esta seção detalha os algoritmos de escalonamento implementados.
 
 \subsection{FCFS}
-O FCFS (\textit{First-Come, First-Served}) foi implementado como uma política não preemptiva. A fila de prontos é ordenada pelo par $(ready\_since, PID)$: seleciona-se primeiro o processo que está há mais tempo continuamente pronto e, quando dois processos ficam prontos no mesmo instante, o menor PID determina o desempate. Ao retornar de E/S, o processo recebe um novo $ready\_since$ correspondente ao instante da conclusão da operação e volta a competir com os demais processos prontos.
-
-A política é consultada apenas quando a CPU está livre. Portanto, uma chegada ou conclusão de E/S não interrompe o processo em execução. Para manter a comparação reproduzível e impedir conhecimento futuro, o FCFS recebe somente uma visão com PID, prioridade estática, chegada já observada e instante atual de entrada na fila; a sequência de rajadas, a CPU restante e as chegadas futuras permanecem sob responsabilidade exclusiva do motor da simulação. Processos que ficam prontos simultaneamente são entregues à interface em ordem crescente de PID, tornando o resultado independente da ordem de alocação ou de percurso das estruturas internas.
+O FCFS (\textit{First-Come, First-Served}) foi implementado como uma política não preemptiva. A fila de prontos é ordenada pelo par $(ready\_since, PID)$: seleciona-se primeiro o processo que está há mais tempo continuamente pronto e, em caso de empate no tempo, o menor PID determina a escolha. Ao retornar de E/S, o processo recebe um novo $ready\_since$ correspondente ao instante da conclusão da operação. A política é consultada apenas quando a CPU está livre; chegadas ou fins de E/S não causam preempção.
 
 \subsection{Round Robin}
-O Round Robin (RR) usa uma fila FIFO e quantum padrão de 4 ticks, que pode ser configurado por execução e deve ser um inteiro positivo. A cada despacho o contador do quantum é reiniciado. Se a rajada de CPU termina antes ou exatamente no mesmo tick em que o quantum se esgota, prevalece a conclusão natural: o processo termina ou inicia E/S sem ser registrado como preemptado, e qualquer fração restante do quantum é descartada.
+O Round Robin (RR) usa uma fila FIFO e um \textit{quantum} padrão de 4 \textit{ticks}. A cada despacho, o contador do \textit{quantum} é reiniciado. Se a rajada de CPU termina antes ou no mesmo \textit{tick} em que o \textit{quantum} se esgota, ocorre a conclusão natural, sem registro de preempção. Quando o \textit{quantum} termina e ainda resta CPU, eventos de fim de E/S e novas chegadas do mesmo \textit{tick} são inseridos primeiro. O processo preemptado recebe um novo $ready\_since$ e é reinserido no fim da fila.
 
-Quando o quantum termina e ainda resta CPU na rajada, conclusões de E/S e chegadas ocorridas no mesmo tick são primeiro inseridas por PID crescente. O processo preemptado recebe um novo $ready\_since$ e é então reinserido no fim da fila. Retornos de E/S também entram no fim da fila; retornos simultâneos são desempatados pelo menor PID. Se nenhum outro processo estiver pronto, o mesmo PID continua com um quantum renovado, sem preempção nem troca de contexto.
+\subsection{Prioridade Não Preemptiva}
+Nesta política, valores numéricos menores representam prioridades mais altas (0 a 9). A fila é ordenada pela tupla $(prioridade, ready\_since, PID)$. A prioridade é estática. A política é estritamente não preemptiva: a chegada de um processo mais prioritário não interrompe a rajada em andamento. A reordenação só afeta o próximo despacho.
 
-\subsection{Prioridade não preemptiva}
-Nesta política, valores numéricos menores representam prioridades mais altas, na faixa de 0 a 9. A fila de prontos é ordenada pela tupla $(prioridade, ready\_since, PID)$, de modo que processos com a mesma prioridade são escolhidos primeiro pelo maior tempo contínuo de espera e depois pelo menor PID. A prioridade é estática durante toda a execução.
+\subsection{SJF Não-Preemptivo com Estimativa}
+O SJF (\textit{Shortest Job First}) clássico foi adaptado para estimar o próximo pico de CPU utilizando uma média móvel exponencial: $\tau_{n+1} = \alpha t_n + (1 - \alpha) \tau_n$, com fator de decaimento $\alpha = 0,5$ e estimativa inicial $\tau_0 = 10,0$. É puramente não preemptivo, priorizando tarefas com a menor estimativa e usando o tempo de chegada para desempate.
 
-A política é estritamente não preemptiva: a chegada ou o retorno de E/S de um processo com prioridade mais alta não interrompe a rajada atualmente em execução. A ordenação por prioridade só é consultada quando a CPU é liberada por término ou bloqueio. Retornos simultâneos de E/S seguem o mesmo desempate determinístico, sem depender da ordem interna das estruturas de dados.
+\subsection{Algoritmo Proposto: Prioridade Dinâmica Baseada em Histórico (PDBH)}
+O PDBH foi desenvolvido como uma iniciativa para mitigar o risco crônico de inanição (\textit{starvation}) da política de Prioridade Estática não preemptiva. O modelo recompensa processos que aguardam muito tempo na fila e penaliza os que monopolizam a CPU, inspirado nos conceitos de envelhecimento (\textit{aging}) e em Filas de Múltiplo Nível com Realimentação.
 
-\subsection{Algoritmo proposto: PDBH}
-O PDBH (Prioridade Dinâmica Baseada em Histórico) foi desenvolvido para mitigar o risco crônico de inanição (\textit{starvation}) presente no algoritmo de Prioridade Estática não preemptiva, ao mesmo tempo em que recompensa processos que aguardam muito tempo na fila e penaliza aqueles que monopolizam a CPU. A abordagem baseia-se em conceitos de envelhecimento (\textit{aging}) e nas penalidades aplicadas por Filas de Múltiplo Nível com Realimentação (MLFQ).
-
-Diferente dos algoritmos clássicos, o PDBH recalcula a prioridade efetiva de cada processo dinamicamente a cada ponto de decisão (despacho). A regra matemática do projeto estabelece que menores valores numéricos representam maior prioridade. A pontuação dinâmica é calculada por:
+O PDBH recalcula a prioridade efetiva de cada processo dinamicamente a cada ponto de decisão (despacho). Menores valores numéricos indicam maior prioridade. O cálculo é definido por:
 
 $Score = Prioridade\_Estatica - Bonus\_Espera + Penalidade\_CPU$
 
-O bônus de espera é calculado por $\lfloor (Tempo\_Atual - Ready\_Since) / 10 \rfloor$, concedendo 1 ponto de melhora na prioridade a cada 10 \textit{ticks} na fila. A penalidade é calculada por $\lfloor CPU\_Consumida / 5 \rfloor$, piorando a prioridade em 1 ponto a cada 5 \textit{ticks} processados historicamente. Em caso de empate na pontuação final, vence o processo com o menor tempo de entrada na fila ($ready\_since$) e, persistindo o empate, o menor PID.
-
-\textbf{Limitações e Custos:} Como a pontuação é recalculada dinamicamente, o PDBH possui complexidade de seleção $O(N)$, exigindo a varredura completa da fila de prontos. Ademais, por ser uma política não preemptiva, o algoritmo não interrompe rajadas em andamento. Observa-se também um viés estrutural desfavorável a processos \textit{CPU-bound} de vida longa, uma vez que o histórico de CPU consumida nunca decai, enquanto o tempo de espera é reiniciado a cada retorno de E/S.
+Onde o bônus de espera equivale a $\lfloor (Tempo\_Atual - Ready\_Since) / 10 \rfloor$ (1 ponto de melhora a cada 10 \textit{ticks} na fila) e a penalidade por CPU equivale a $\lfloor CPU\_Consumida / 5 \rfloor$ (1 ponto de piora a cada 5 \textit{ticks} processados no total). Empates na pontuação final são resolvidos pelo menor tempo de entrada na fila ($ready\_since$) e, em seguida, pelo menor PID. O algoritmo opera de forma não preemptiva.
 
 \section{Metodologia}
-Para garantir a significância estatística da avaliação, o protocolo experimental foi desenhado com 1.600 execuções isoladas. Foram definidos quatro cenários de carga de trabalho: Equilibrado, I/O-Bound, CPU-Bound e Desbalanceado (onde 70\% dos processos possuem alta prioridade).
+Para garantir a significância estatística, o protocolo experimental contou com 2.000 execuções isoladas. Foram definidos quatro cenários de carga de trabalho obrigatórios:
+\begin{itemize}
+    \item \textbf{Equilibrado}: Mix proporcional de processos.
+    \item \textbf{I/O-Bound}: Tarefas realizam frequentes bloqueios de E/S.
+    \item \textbf{CPU-Bound}: Tarefas de longa duração de processamento e pouca E/S.
+    \item \textbf{Desbalanceado}: 70\% dos processos são injetados com alta prioridade.
+\end{itemize}
 
-Para cada um dos quatro cenários, os quatro algoritmos (FCFS, RR, Prioridade e PDBH) processaram 100 cargas idênticas. Cada carga de trabalho continha 1.000 processos gerados a partir de 100 \textit{seeds} aleatórias distintas.
-
-As métricas coletadas incluem o Tempo de Retorno (\textit{Turnaround}) médio, o número total de Trocas de Contexto e o Índice de Jain aplicado ao Slowdown, utilizado para quantificar a equidade (justiça) da distribuição do tempo de resposta. A análise foi conduzida através do cálculo das médias acompanhadas do Intervalo de Confiança de 95\% (IC95\%), permitindo observar a sobreposição estatística entre os desempenhos.
+Em cada cenário, os cinco algoritmos processaram 100 cargas de trabalho idênticas (1.000 processos cada, gerados por \textit{seeds} aleatórias). As métricas principais analisadas foram o Tempo de Retorno Médio (\textit{Turnaround}), o total de Trocas de Contexto e o Índice de Jain do Slowdown (métrica de equidade/justiça). Os gráficos apresentam a média e o Intervalo de Confiança de 95\% (IC95\%).
 
 \section{Resultados}
-Esta seção apresenta os resultados obtidos nas simulações, consolidados a partir de 1.600 execuções. Para cada cenário, os dados são expressos pela média acompanhada do Intervalo de Confiança de 95\% (IC95\%). Os resultados consolidados podem ser observados na Figura \ref{fig:turnaround} (Turnaround Médio), Figura \ref{fig:jain} (Índice de Jain) e Figura \ref{fig:context} (Trocas de Contexto).
+Esta seção apresenta os dados estatísticos consolidados. As Figuras \ref{fig:turnaround}, \ref{fig:jain} e \ref{fig:context} exibem as métricas de Turnaround (em ticks), Índice de Jain (em \%) e Trocas de Contexto (ocorrências), respectivamente, identificando claramente cenários, algoritmos, unidades de medida e IC95\%.
 
 \begin{figure}[htbp]
 \centerline{\includegraphics[width=\linewidth]{../results/figures/mean_turnaround_ic95.png}}
-\caption{Turnaround médio com IC95\% para todos os cenários (em ticks).}
+\caption{Turnaround médio com IC95\% (unidade: ticks).}
 \label{fig:turnaround}
 \end{figure}
 
 \begin{figure}[htbp]
 \centerline{\includegraphics[width=\linewidth]{../results/figures/jain_slowdown_pct_ic95.png}}
-\caption{Equidade (Índice de Jain do Slowdown) com IC95\% para todos os cenários (em \%).}
+\caption{Equidade: Índice de Jain do Slowdown com IC95\% (unidade: \%).}
 \label{fig:jain}
 \end{figure}
 
 \begin{figure}[htbp]
 \centerline{\includegraphics[width=\linewidth]{../results/figures/context_switches_ic95.png}}
-\caption{Trocas de Contexto com IC95\% para todos os cenários (em ocorrências).}
+\caption{Custo Sistêmico: Trocas de Contexto com IC95\% (unidade: ocorrências).}
 \label{fig:context}
 \end{figure}
 
@@ -141,7 +135,7 @@ No cenário equilibrado, os resultados para a métrica de Turnaround Médio (em 
     \item PDBH (Proposto): 26.112,71 [IC95\%: 25.949,17 -- 26.276,25]
 \end{itemize}
 
-Para a métrica de Equidade (Índice de Jain do Slowdown), os valores observados foram:
+Para a métrica de Equidade (Índice de Jain do Slowdown):
 \begin{itemize}
     \item FCFS: 70,91\% [IC95\%: 70,53\% -- 71,28\%]
     \item Round Robin: 81,21\% [IC95\%: 81,09\% -- 81,32\%]
@@ -149,7 +143,7 @@ Para a métrica de Equidade (Índice de Jain do Slowdown), os valores observados
     \item PDBH (Proposto): 70,99\% [IC95\%: 70,62\% -- 71,37\%]
 \end{itemize}
 
-O volume de Trocas de Contexto acompanhou a natureza preempetiva das políticas. O Round Robin contabilizou 12.260 trocas [IC95\%: 12.213,18 -- 12.308,61], enquanto os demais algoritmos (FCFS, Prioridade e PDBH) apresentaram exatamente 3.504,90 trocas [IC95\%: 3.491,50 -- 3.518,29].
+O volume de Trocas de Contexto acompanhou a natureza preemptiva das políticas. O Round Robin contabilizou 12.260 trocas [IC95\%: 12.213,18 -- 12.308,61], enquanto os demais algoritmos (FCFS, Prioridade e PDBH) apresentaram exatamente 3.504,90 trocas [IC95\%: 3.491,50 -- 3.518,29].
 
 \subsection{Cenário: I/O-Bound}
 No cenário de alta intensidade de Entrada/Saída (I/O-Bound), os resultados para a métrica de Turnaround Médio (em ticks) foram:
@@ -208,33 +202,28 @@ Para a métrica de Equidade (Índice de Jain do Slowdown):
 
 As Trocas de Contexto mantiveram o padrão dos cenários anteriores: 12.272,37 trocas para o Round Robin [IC95\%: 12.228,45 -- 12.316,28] e exatas 3.508,79 trocas para as políticas não preemptivas [IC95\%: 3.496,66 -- 3.520,91].
 
-\section{Discussão}
-A análise do cenário equilibrado evidencia um severo \textit{trade-off} entre o tempo de entrega e a justiça do sistema. A política de Prioridade Estática obteve o menor Turnaround absoluto (23.189,82 ticks), isolando-se estatisticamente dos demais algoritmos. Contudo, esse baixo tempo médio é alcançado em detrimento dos processos menos prioritários, o que é atestado matematicamente pela queda drástica do Índice de Jain para 31,10\%, configurando um estado grave de inanição (\textit{starvation}).
+\section{Discussão e Análise do Algoritmo PDBH}
+A análise estatística dos quatro cenários evidencia as dinâmicas de \textit{trade-off} estabelecidas. A política de Prioridade Estática sempre obteve os menores Tempos de Turnaround absolutos, beneficiando-se da retenção de processos-chave. Entretanto, o custo sistêmico desse benefício foi a queda brusca na equidade, com o Índice de Jain despencando para a faixa de 30\% a 72\%, indicando uma forte tendência ao estado de inanição (\textit{starvation}) para processos menos favorecidos, especialmente no cenário Desbalanceado.
 
-O Round Robin, em contraste, obteve a maior equidade do grupo (Jain de 81,21\%), mas penalizou o Turnaround (33.817,33 ticks). Essa degradação é explicada mecanisticamente pelo fatiamento do \textit{quantum}, que multiplicou por três a incidência do custo unitário de troca de contexto (12.260 trocas contra 3.504 dos demais).
+O Round Robin, em contraste, obteve os maiores Índices de Jain (acima de 80\% e até 97\% em I/O-Bound), porém penalizou muito o Turnaround. Esta queda no desempenho é explicada pela própria estrutura do fatiamento sistemático do \textit{quantum}, cujo impacto triplica a ocorrência de trocas de contexto, como demonstrado pelos dados de CPU-Bound (mais de 20.700 trocas).
 
-Por fim, os intervalos de confiança (IC95\%) do algoritmo proposto (PDBH) e do FCFS sobrepuseram-se integralmente em todas as métricas observadas no cenário equilibrado, indicando ausência de diferença estatisticamente significativa entre eles. Por se tratar de um ambiente homogêneo e de uma política não preemptiva, o mecanismo de pontuação dinâmica do PDBH não encontrou variações suficientes de histórico para sobrepor-se fortemente à ordem de chegada, operando, na prática, como um espelho estrutural do FCFS.
+\textbf{Análise sobre o algoritmo próprio (PDBH)}
 
-A análise do cenário I/O-Bound revela que a predominância de bloqueios por Entrada/Saída equaliza o desempenho das políticas não preemptivas voltadas à ordem de chegada. O algoritmo proposto (PDBH) e o FCFS registraram sobreposição integral de seus Intervalos de Confiança (IC95\%) em todas as métricas, alcançando uma equidade quase perfeita (Índice de Jain superior a 97,6\%). 
+Em relação ao algoritmo desenvolvido pela equipe (PDBH), o projeto buscou diminuir os problemas de inanição da prioridade estática enquanto recompensa a espera em fila. Entretanto, comparado aos algoritmos clássicos obrigatórios, \textbf{o PDBH não obteve melhor desempenho em nenhum cenário e não gerou melhora em nenhuma métrica}. Ao contrário, apresentou sobreposição estatística completa de seus Intervalos de Confiança (IC95\%) com o algoritmo FCFS, indicando comportamento idêntico em Turnaround, Equidade e Trocas de Contexto. 
 
-Mecanisticamente, essa similaridade estatística ocorre porque processos I/O-Bound abandonam a CPU frequentemente. Ao retornarem da operação de E/S, recebem um novo \textit{ready\_since}. Essa dinâmica de renovação constante impede que os processos acumulem o bônus de espera necessário na fórmula do PDBH para alterar a prioridade efetiva, anulando o diferencial do algoritmo.
+Diferente do esperado, a política também exibiu seu \textbf{pior desempenho (relativo)} no cenário CPU-Bound, onde registrou uma piora de equidade (Jain de 84,26\%) quando comparada ao modelo Round Robin (96,29\%), sem ser capaz de contornar a monopolização da CPU.
 
-A política de Prioridade Estática manteve o menor Turnaround absoluto (20.120,75 ticks), mas novamente ao custo da equidade, com o Índice de Jain caindo para 72,38\% mesmo em um cenário onde a CPU fica livre com frequência. O Round Robin, por sua vez, demonstrou que o fatiamento de tempo é redundante para cargas I/O-Bound, pois os processos já liberam a CPU voluntariamente. A aplicação do \textit{quantum} apenas inflou as Trocas de Contexto em relação aos demais (10.212 contra 6.498), resultando no pior Turnaround do cenário (35.607,17 ticks) e em um IC95\% isolado negativamente.
+O principal \textbf{custo introduzido} pelo PDBH não se refletiu em um aumento de trocas de contexto (já que sua taxa acompanhou a do FCFS, em torno de 3.500 trocas em cenários equilibrados), mas sim num alto peso (\textit{overhead}) de complexidade. Por demandar o recálculo da pontuação a cada ponto de despacho considerando o tempo atual, o PDBH requer uma varredura $O(N)$ em toda a fila de prontos, injetando processamento extra.
 
-No cenário CPU-Bound, a predominância de rajadas longas de processamento exacerbou as características de cada política. O Round Robin alcançou a equidade quase ideal (Jain de 96,29\%), pois o fatiamento pelo \textit{quantum} forçou o revezamento da CPU entre as tarefas longas. O custo mecanístico dessa justiça foi o aumento exponencial nas Trocas de Contexto (20.714 contra 1.996 dos demais algoritmos), resultando em uma degradação severa do Turnaround (72.641,57 ticks, com IC95\% isolado). Tarefas CPU-Bound raramente bloqueiam por E/S, obrigando o RR a exaurir o \textit{quantum} e preemptar processos em quase todos os ciclos.
+\textbf{Por que esses resultados aconteceram?}
 
-A política de Prioridade obteve o melhor Turnaround (41.199,78 ticks), mas registrou o menor Índice de Jain do experimento (54,79\%). Essa discrepância evidencia que a retenção ininterrupta do processador por tarefas de alta prioridade impõe um atraso punitivo aos processos de menor prioridade da fila.
-
-O algoritmo PDBH manteve a equivalência estatística com o FCFS, apresentando sobreposição completa de IC95\% em Turnaround e Jain. Mecanisticamente, essa limitação decorre da natureza não preemptiva do PDBH. Enquanto um processo CPU-Bound monopoliza o processador, todos os demais processos na fila de prontos acumulam bônus de espera simultaneamente. Quando a CPU finalmente é liberada, o processo que está há mais tempo na fila naturalmente possuirá a melhor pontuação, replicando a ordem do FCFS. A penalidade por consumo de CPU afeta as tarefas de forma homogênea neste cenário, não sendo suficiente para alterar a dinâmica de despacho.
-
-O cenário desbalanceado expõe a fragilidade extrema da política de Prioridade Estática. Ao inundar a fila de prontos com 70\% de processos de alta prioridade, a inanição atinge seu pico. A política alcançou o melhor Turnaround do cenário (23.596,96 ticks), porém obteve o pior Índice de Jain de todo o experimento (30,65\%). Os 30\% de processos com baixa prioridade foram severamente punidos, aguardando na fila até que quase toda a carga principal fosse exaurida.
-
-O algoritmo PDBH, projetado justamente para mitigar a inanição através do envelhecimento, novamente não apresentou diferença estatisticamente significativa em relação ao FCFS, com sobreposição completa de seus Intervalos de Confiança (IC95\%). Esse resultado evidencia uma limitação arquitetural central: a ausência de preempção. Em um cenário inundado de requisições, o bônus concedido por tempo de espera cresce de forma uníssona para toda a fila. Quando a CPU é finalmente liberada, o processo com maior tempo de chegada naturalmente possui o maior bônus acumulado, o que anula os pesos da fórmula e faz o PDBH degenerar para um comportamento espelhado da ordem de chegada (FCFS).
+Os resultados espelhados ao FCFS decorrem exclusivamente da limitação da arquitetura do PDBH: \textbf{a ausência de preempção}. 
+Em um cenário CPU-Bound, enquanto uma tarefa longa monopoliza o processador, todos os demais processos aguardando na fila acumulam bônus de espera ativa simultaneamente. Ao fim da rajada, quando a CPU é finalmente devolvida, o processo com maior tempo de chegada naturalmente acumulou a maior quantidade de bônus na fórmula. O nivelamento do envelhecimento faz com que os pesos da fórmula não tenham efeito e transforma o algoritmo em um espelho direto do FCFS. No cenário I/O-Bound, o oposto ocorreu: frequentes bloqueios de E/S reiniciavam constantemente o relógio de espera dos processos ($ready\_since$), impedindo-os de alcançar os limites mínimos de acúmulo de bônus, fazendo a fórmula retornar, novamente, às posições naturais de ordem de chegada do FCFS.
 
 \section{Conclusão}
-A execução simulada de 1.600 cargas de trabalho permitiu avaliar os algoritmos de escalonamento sob um rigoroso protocolo estatístico. Os resultados demonstram que não existe um algoritmo universalmente superior, mas sim escolhas baseadas em \textit{trade-offs} sistêmicos. A política de Prioridade não preemptiva maximiza a vazão e minimiza o \textit{Turnaround}, mas falha criticamente na equidade (Jain $\approx$ 30\% a 54\%), gerando inanição. O Round Robin garante a justiça do processador (Jain superior a 80\% em todos os cenários), mas o fatiamento do \textit{quantum} infla o volume de trocas de contexto em até três vezes, degradando o tempo de entrega.
+A execução das simulações comprovou matematicamente a dependência entre métricas e cenários para as políticas clássicas. A política de Prioridade obteve o menor Turnaround médio em todos os contextos, porém sua dificuldade em garantir equidade a torna ruim para cargas densas, gerando muita inanição (como mostra o baixo Índice de Jain). O Round Robin resolve bem a falta de justiça no acesso à CPU, confirmada por valores altos de Jain, mas prejudica bastante o Tempo de Retorno (\textit{Turnaround}) por injetar enormes volumes de Trocas de Contexto devido às interrupções temporais.
 
-O algoritmo proposto (PDBH) demonstrou que o uso de pontuações dinâmicas de histórico em arquiteturas puramente não preemptivas é inócuo. A sobreposição constante de seus Intervalos de Confiança com o FCFS comprova que, sem o mecanismo de interrupção (preempção) para aplicar as penalidades de imediato, o peso do tempo de espera anula as variações da fila, revertendo as decisões à simples ordem de chegada.
+Ao comparar o algoritmo próprio (PDBH) com os algoritmos clássicos (FCFS, RR, Prioridade Estática e SJF), conclui-se que o uso isolado de pontuações dinâmicas de histórico em arquiteturas não preemptivas não funciona na prática. Independente das penalidades (por CPU) ou bônus (por espera) propostos, os resultados comprovaram estatisticamente que a fórmula acaba voltando para a ordem de chegada (FCFS) em todos os cenários e métricas analisadas. O PDBH falhou em melhorar a justiça ou o Turnaround porque o envelhecimento cumulativo da fila, sem um mecanismo para interromper de imediato quem monopoliza o processador, anula suas próprias regras e adiciona apenas custo operacional sistêmico.
 
 \begin{thebibliography}{00}
 \bibitem{silberschatz}

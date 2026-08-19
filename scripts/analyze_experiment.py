@@ -20,7 +20,7 @@ from typing import Iterable
 
 SCHEMA_VERSION = 1
 SCENARIOS = ("equilibrado", "io_bound", "cpu_bound", "prioridades_desbalanceadas")
-ALGORITHMS = ("fcfs", "rr", "prioridade", "proprio")
+ALGORITHMS = ("fcfs", "rr", "prioridade", "proprio", "sjf")
 SEEDS = tuple(range(1, 101))
 PROCESS_COUNT = 1000
 CONTEXT_SWITCH_COST = 1
@@ -68,6 +68,7 @@ ALGORITHM_LABELS = {
     "rr": "RR",
     "prioridade": "Prioridade",
     "proprio": "PDBH (próprio)",
+    "sjf": "SJF",
 }
 
 
@@ -390,10 +391,10 @@ def render_figures(rows: list[dict[str, object]], temporary_paths: dict[str, Pat
             "Matplotlib ausente; instale requirements-analysis.txt antes de gerar as figuras"
         ) from error
 
-    hatches = ("", "///", "xxx", "...")
-    colors = ("#f2f2f2", "#c7c7c7", "#969696", "#525252")
+    hatches = ("", "///", "xxx", "...", "\\\\")
+    colors = ("#f2f2f2", "#c7c7c7", "#969696", "#525252", "#2e2e2e")
     group_centers = list(range(len(SCENARIOS)))
-    width = 0.19
+    width = 0.16
     offsets = tuple((index - (len(ALGORITHMS) - 1) / 2) * width for index in range(len(ALGORITHMS)))
 
     for metric, metadata in METRICS.items():
