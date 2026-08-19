@@ -37,11 +37,12 @@ artigo/              entregável em formato de artigo
 ```
 
 ## Algoritmos
-O simulador implementa quatro políticas de escalonamento:
+O simulador implementa cinco políticas de escalonamento:
 - **FCFS (First-Come, First-Served):** Ordem de chegada sem preempção.
 - **Round Robin (RR):** Fatiamento de tempo com quantum configurável.
 - **Prioridade:** Política baseada em prioridade estática, estritamente não preemptiva.
 - **PDBH (Prioridade Dinâmica Baseada em Histórico):** Algoritmo próprio não preemptivo que aplica bônus de espera e penalidades por uso de CPU para mitigar inanição.
+- **SJF (Shortest Job First):** Algoritmo clássico adicional não-preemptivo que estima a próxima rajada usando média móvel exponencial.
 
 ## Cenários
 O simulador executa sobre quatro cenários de carga de trabalho para avaliação estatística:
@@ -119,7 +120,8 @@ make test
 ## Lote completo
 
 ```sh
-make batch    # executa 1.600 simulações
+make batch        # executa 1.600 simulações dos 4 algoritmos base
+make batch-sjf    # inclui o SJF no experimento
 ```
 
 ## Consolidação e gráficos
