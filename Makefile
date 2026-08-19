@@ -12,6 +12,7 @@ ANALYSIS_DEPS_STAMP = $(VENV_DIR)/.analysis-deps.stamp
 TARGET_DEV = $(BIN_DIR)/simulador_dev
 TARGET_RELEASE = $(BIN_DIR)/simulador
 EXPERIMENT_ID ?= main
+PILOT_ID ?= pilot
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 DEV_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/dev/%.o,$(SRCS))
@@ -65,6 +66,7 @@ test: dev analysis-deps
 	sh tests/test_cli.sh ./$(TARGET_DEV)
 	$(VENV_PYTHON) tests/test_experiment.py
 	$(VENV_PYTHON) tests/test_analysis.py
+	$(VENV_PYTHON) tests/test_evidence.py
 
 simulate: release
 	./$(TARGET_RELEASE) --config configs/default.conf --algorithm fcfs
@@ -75,6 +77,12 @@ batch: release
 batch-reduced: release
 	$(PYTHON) scripts/run_experiment.py --experiment-id smoke --binary $(TARGET_RELEASE) --reduced
 
+pilot: release
+	$(PYTHON) scripts/run_experiment.py --experiment-id $(PILOT_ID) --binary $(TARGET_RELEASE) --pilot
+
+pilot-verify: release
+	$(PYTHON) scripts/run_experiment.py --experiment-id $(PILOT_ID) --binary $(TARGET_RELEASE) --pilot --verify-only
+
 batch-verify: release
 	$(PYTHON) scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE) --verify-only
 
@@ -83,6 +91,21 @@ graphs: analysis-deps
 		--experiment-dir results/raw/$(EXPERIMENT_ID) \
 		--summary-output results/consolidated/summary.csv \
 		--figures-dir results/figures
+
+evidence: analysis-deps
+	$(VENV_PYTHON) scripts/package_experiment.py \
+		--experiment-dir results/raw/main \
+		--output-dir results/evidence \
+		--summary results/consolidated/summary.csv \
+		--figures-dir results/figures
+
+evidence-verify: analysis-deps
+	$(VENV_PYTHON) scripts/package_experiment.py \
+		--experiment-dir results/raw/main \
+		--output-dir results/evidence \
+		--summary results/consolidated/summary.csv \
+		--figures-dir results/figures \
+		--verify-only
 
 analyze: $(ANALYZE_OBJS)
 
@@ -98,4 +121,4 @@ compile_commands:
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR) results/raw
 
-.PHONY: all dev release analysis-deps test simulate batch batch-reduced batch-verify graphs analyze compile_commands clean
+.PHONY: all dev release analysis-deps test simulate batch batch-reduced pilot pilot-verify batch-verify graphs evidence evidence-verify analyze compile_commands clean

@@ -143,6 +143,7 @@ def identity(args: argparse.Namespace, repo: Path, binary: Path, config: Path,
         "git_commit": git_value(repo, "rev-parse", "HEAD") or "unknown",
         "git_tag": git_value(repo, "describe", "--tags", "--exact-match", "HEAD"),
         "binary_sha256": sha256(binary),
+        "runner_sha256": sha256(Path(__file__).resolve()),
         "config": {
             "path": os.path.relpath(config, repo), "sha256": sha256(config),
             "effective": effective, "scenarios": list(scenarios),
@@ -200,7 +201,7 @@ def create_manifest(experiment_id: str, identity_value: dict) -> dict:
 def ensure_compatible(manifest: dict, experiment_id: str, expected: dict) -> None:
     if manifest.get("schema_version") != SCHEMA_VERSION or manifest.get("experiment_id") != experiment_id:
         raise ExperimentError("manifesto pertence a outro schema ou experimento")
-    for key in ("git_commit", "git_tag", "binary_sha256", "config"):
+    for key in ("git_commit", "git_tag", "binary_sha256", "runner_sha256", "config"):
         if manifest.get(key) != expected.get(key):
             raise ExperimentError(
                 f"identidade incompativel ({key}); use outro --experiment-id para nao misturar experimentos"
@@ -307,6 +308,15 @@ def report_progress(run_id: str, status: str, valid_workloads: set[tuple],
     )
 
 
+def execution_shape(reduced: bool, pilot: bool) -> tuple[tuple[str, ...], int, int, int]:
+    """Return scenarios, first seed, last seed and process count for a named profile."""
+    if pilot:
+        return SCENARIOS, 1, 10, 1000
+    if reduced:
+        return ("equilibrado",), 1, 2, 10
+    return SCENARIOS, 1, 100, 1000
+
+
 def execute(args: argparse.Namespace) -> int:
     repo = Path(__file__).resolve().parent.parent
     binary = (repo / args.binary).resolve() if not Path(args.binary).is_absolute() else Path(args.binary)
@@ -316,8 +326,7 @@ def execute(args: argparse.Namespace) -> int:
     if not config.is_file():
         raise ExperimentError(f"configuracao ausente: {config}")
 
-    scenarios = ("equilibrado",) if args.reduced else SCENARIOS
-    first, last, count = (1, 2, 10) if args.reduced else (1, 100, 1000)
+    scenarios, first, last, count = execution_shape(args.reduced, args.pilot)
     root = (repo / args.results_dir / args.experiment_id).resolve()
     manifest_path = root / "manifest.json"
     current_identity = identity(args, repo, binary, config, scenarios, first, last, count)
@@ -508,8 +517,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="configs/default.conf")
     parser.add_argument("--binary", default="bin/simulador")
     parser.add_argument("--results-dir", default="results/raw")
-    parser.add_argument("--reduced", action="store_true",
-                        help="executa 1 cenario x 2 seeds x 4 algoritmos x 10 processos")
+    profile = parser.add_mutually_exclusive_group()
+    profile.add_argument("--reduced", action="store_true",
+                         help="executa 1 cenario x 2 seeds x 4 algoritmos x 10 processos")
+    profile.add_argument("--pilot", action="store_true",
+                         help="executa 4 cenarios x 10 seeds x 4 algoritmos x 1000 processos")
     parser.add_argument("--verify-only", action="store_true",
                         help="valida completude sem executar nem alterar artefatos")
     parsed = parser.parse_args()

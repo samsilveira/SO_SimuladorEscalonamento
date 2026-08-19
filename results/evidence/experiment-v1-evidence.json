@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "experiment_id": "main",
+  "git_tag": "experiment-v1",
+  "git_commit": "8af1022a90e804e3d667e7accf41ae01620ad4be",
+  "binary_sha256": "52602236f6bbd8091ba5f45d937695e2198bc8744875c5a85b7ce3828ea7d7c0",
+  "runner_sha256": "281901a116c21c3ac39ca3136f57e9ac4841737039136dae66acedd2d6423c2c",
+  "experiment_started_at": "2026-08-19T02:19:04+00:00",
+  "experiment_finished_at": "2026-08-19T02:23:47+00:00",
+  "matrix": {
+    "workloads": 400,
+    "runs": 1600
+  },
+  "manifest": {
+    "file": "experiment-v1-manifest.json",
+    "sha256": "c3f1b51ba47dc4274df95973d09a8b7d75e454941163524ca7abbfa8f56e44e8"
+  },
+  "raw_archive": {
+    "file": "experiment-v1-raw.tar.gz",
+    "sha256": "43e210a9d7e51575e7dfb9e5581bf2ebc95aafc2d41dcf1e7b43be956abd66f9",
+    "members": 2001,
+    "size_bytes": 10034328
+  },
+  "published_outputs": {
+    "results/consolidated/summary.csv": "80ed6ec27de369d8887fa952a38e28c7899da1fa0fec2c0fe52c521e7affda02",
+    "results/figures/context_switches_ic95.png": "575741f11af62a8dba0daa19ea50354bf4b6f6c5e95b6c29bbd19a213f053691",
+    "results/figures/jain_slowdown_pct_ic95.png": "254f58162be6e9d8d6dded7901a2eec624bdd48028ba1ae36cace2b0f0b5c9f5",
+    "results/figures/mean_turnaround_ic95.png": "427bc0609c0c85ac45f8a628c7f582ac0f6f95153b5d5255b00d1f6e78e56d92"
+  }
+}

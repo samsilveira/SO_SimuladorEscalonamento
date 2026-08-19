@@ -34,6 +34,19 @@ retomada.
 Resultados estatísticos pequenos e revisados pertencem a `consolidated/`; gráficos
 finais pertencem a `figures/`.
 
+## Piloto reproduzível
+
+O piloto da auditoria usa os mesmos quatro cenários e 1.000 processos do lote principal,
+mas limita a matriz às seeds 1 a 10. Execute e valide sem alterar artefatos com:
+
+```sh
+make pilot
+make pilot-verify
+```
+
+O perfil `batch-reduced` continua sendo apenas uma regressão rápida de desenvolvimento
+(um cenário, duas seeds e dez processos); ele não substitui o piloto experimental.
+
 ## Consolidacao estatistica
 
 Depois que `results/raw/main/manifest.json` registrar as 1.600 execucoes validas,
@@ -47,3 +60,27 @@ O Make cria `.venv/` quando necessario, instala nela a dependencia direta fixada
 
 O comando revalida o manifesto, os hashes e cada CSV antes de publicar qualquer arquivo. Cada uma das 16 combinacoes de cenario e algoritmo deve conter exatamente as seeds 1 a 100; ausencias, duplicatas, `NaN`, infinito e valores impossiveis interrompem a consolidacao. O commit registrado tambem deve conter a implementacao do PDBH; lotes anteriores sao preservados, mas nao podem gerar resultados finais.
 Para analisar outro ID sem renomear seus dados, use `make graphs EXPERIMENT_ID=<id>`. A saida e `consolidated/summary.csv`, com media, desvio padrao amostral (`n - 1`) e IC95%, alem de tres PNGs a 300 DPI em `figures/`.
+
+## Preservação e publicação da evidência
+
+No checkout exato usado pelo lote, execute `make batch-verify` e `make graphs`. Em uma
+branch posterior, `make evidence` faz a validação histórica contra a tag registrada e
+gera um pacote determinístico da matriz bruta:
+
+```sh
+make evidence
+make evidence-verify
+```
+
+O empacotador revalida os 400 workloads e 1.600 resultados, exige que o commit do
+manifesto coincida exatamente com a tag registrada e rejeita arquivos ausentes,
+extras ou links simbólicos. São produzidos em `results/evidence/`:
+
+- `experiment-v1-manifest.json`: snapshot versionável do manifesto final;
+- `experiment-v1-evidence.json`: hashes do manifesto, pacote bruto, consolidado e figuras;
+- `experiment-v1-raw.tar.gz`: pacote determinístico para anexar à GitHub Release.
+
+O `.tar.gz` permanece fora do Git por tamanho. O manifesto final e o registro JSON
+devem ser commitados; o pacote deve ser publicado como asset da mesma tag e seu SHA-256
+deve coincidir com `raw_archive.sha256` no registro versionado. Não execute `make clean`
+antes de publicar ou verificar a evidência, pois esse alvo remove `results/raw/`.
