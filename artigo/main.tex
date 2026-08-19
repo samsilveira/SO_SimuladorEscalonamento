@@ -44,9 +44,9 @@ Sistemas Operacionais, Escalonamento de Processos, Simulação, Avaliação de D
 \end{IEEEkeywords}
 
 \section{Introdução}
-O escalonamento de processos é uma das funções mais críticas de um Sistema Operacional, responsável por multiplexar o uso do processador (CPU) entre diversas tarefas concorrentes. A escolha da política de escalonamento afeta diretamente o desempenho percebido pelo usuário e a eficiência global do sistema, exigindo um equilíbrio constante entre métricas conflitantes, como a minimização do tempo de espera e a garantia de justiça (equidade) na alocação de recursos.
+O escalonamento de processos é uma das funções mais críticas de um Sistema Operacional, responsável por multiplexar o uso do processador (CPU) entre diversas tarefas concorrentes~\cite{tanenbaum, stallings}. A escolha da política de escalonamento afeta diretamente o desempenho percebido pelo usuário e a eficiência global do sistema, exigindo um equilíbrio constante entre métricas conflitantes, como a minimização do tempo de espera e a garantia de justiça (equidade) na alocação de recursos.
 
-Políticas clássicas apresentam comportamentos teóricos bem estabelecidos~\cite{silberschatz}: abordagens baseadas em ordem de chegada (FCFS) são simples, mas vulneráveis ao efeito comboio; o fatiamento de tempo (\textit{Round Robin}) promove justiça à custa de frequentes trocas de contexto; e algoritmos baseados em prioridade estática otimizam a execução de tarefas críticas, mas introduzem o risco crônico de inanição (\textit{starvation}) para processos menos favorecidos.
+Políticas clássicas apresentam comportamentos teóricos bem estabelecidos~\cite{silberschatz, tanenbaum}: abordagens baseadas em ordem de chegada (FCFS) são simples, mas vulneráveis ao efeito comboio; o fatiamento de tempo (\textit{Round Robin}) promove justiça à custa de frequentes trocas de contexto; e algoritmos baseados em prioridade estática otimizam a execução de tarefas críticas, mas introduzem o risco crônico de inanição (\textit{starvation}) para processos menos favorecidos.
 
 Para analisar essas dinâmicas de forma empírica e reprodutível, este trabalho apresenta o desenvolvimento de um simulador de eventos discretos. Além de implementar os algoritmos clássicos obrigatórios (FCFS, Round Robin, Prioridade Estática e SJF), o projeto propõe e avalia de forma aprofundada a Prioridade Dinâmica Baseada em Histórico (PDBH). Este algoritmo próprio, de natureza não preemptiva, visa mitigar a inanição por meio da aplicação de bônus atrelados ao tempo de espera e penalidades proporcionais ao consumo acumulado de CPU.
 
@@ -86,7 +86,7 @@ Nesta política, valores numéricos menores representam prioridades mais altas (
 O SJF (\textit{Shortest Job First}) clássico foi adaptado para estimar o próximo pico de CPU utilizando uma média móvel exponencial: $\tau_{n+1} = \alpha t_n + (1 - \alpha) \tau_n$, com fator de decaimento $\alpha = 0,5$ e estimativa inicial $\tau_0 = 10,0$. É puramente não preemptivo, priorizando tarefas com a menor estimativa e usando o tempo de chegada para desempate.
 
 \subsection{Algoritmo Proposto: Prioridade Dinâmica Baseada em Histórico (PDBH)}
-O PDBH foi desenvolvido como uma iniciativa para mitigar o risco crônico de inanição (\textit{starvation}) da política de Prioridade Estática não preemptiva. O modelo recompensa processos que aguardam muito tempo na fila e penaliza os que monopolizam a CPU, inspirado nos conceitos de envelhecimento (\textit{aging}) e em Filas de Múltiplo Nível com Realimentação.
+O PDBH foi desenvolvido como uma iniciativa para mitigar o risco crônico de inanição (\textit{starvation}) da política de Prioridade Estática não preemptiva. O modelo recompensa processos que aguardam muito tempo na fila e penaliza os que monopolizam a CPU, inspirado nos conceitos de envelhecimento (\textit{aging}) e em Filas de Múltiplo Nível com Realimentação~\cite{tanenbaum, stallings}.
 
 O PDBH recalcula a prioridade efetiva de cada processo dinamicamente a cada ponto de decisão (despacho). Menores valores numéricos indicam maior prioridade. O cálculo é definido por:
 
@@ -103,7 +103,7 @@ Para garantir a significância estatística, o protocolo experimental contou com
     \item \textbf{Desbalanceado}: 70\% dos processos são injetados com alta prioridade.
 \end{itemize}
 
-Em cada cenário, os cinco algoritmos processaram 100 cargas de trabalho idênticas (1.000 processos cada, gerados por \textit{seeds} aleatórias). As métricas principais analisadas foram o Tempo de Retorno Médio (\textit{Turnaround}), o total de Trocas de Contexto e o Índice de Jain do Slowdown (métrica de equidade/justiça). Os gráficos apresentam a média e o Intervalo de Confiança de 95\% (IC95\%).
+Em cada cenário, os cinco algoritmos processaram 100 cargas de trabalho idênticas (1.000 processos cada, gerados por \textit{seeds} aleatórias). As métricas principais analisadas foram o Tempo de Retorno Médio (\textit{Turnaround}), o total de Trocas de Contexto e o Índice de Jain do Slowdown (métrica de equidade/justiça)~\cite{jain1984}. Os gráficos apresentam a média e o Intervalo de Confiança de 95\% (IC95\%).
 
 \section{Resultados}
 Esta seção apresenta os dados estatísticos consolidados. As Figuras \ref{fig:turnaround}, \ref{fig:jain} e \ref{fig:context} exibem as métricas de Turnaround (em ticks), Índice de Jain (em \%) e Trocas de Contexto (ocorrências), respectivamente, identificando claramente cenários, algoritmos, unidades de medida e IC95\%.
@@ -226,10 +226,17 @@ A execução das simulações comprovou matematicamente a dependência entre mé
 Ao comparar o algoritmo próprio (PDBH) com os algoritmos clássicos (FCFS, RR, Prioridade Estática e SJF), conclui-se que o uso isolado de pontuações dinâmicas de histórico em arquiteturas não preemptivas não funciona na prática. Independente das penalidades (por CPU) ou bônus (por espera) propostos, os resultados comprovaram estatisticamente que a fórmula acaba voltando para a ordem de chegada (FCFS) em todos os cenários e métricas analisadas. O PDBH falhou em melhorar a justiça ou o Turnaround porque o envelhecimento cumulativo da fila, sem um mecanismo para interromper de imediato quem monopoliza o processador, anula suas próprias regras e adiciona apenas custo operacional sistêmico.
 
 \begin{thebibliography}{00}
+\bibitem{tanenbaum}
+A.~S. Tanenbaum e H.~Bos, \textit{Sistemas Operacionais Modernos}, 4ª~ed. São Paulo: Pearson, 2016.
+
 \bibitem{silberschatz}
-Silberschatz, A., Galvin, P. B., e Gagne, G.
-\newblock Sistemas Operacionais com Java.
-\newblock Elsevier, 2015.
+A.~Silberschatz, P.~B. Galvin, e G.~Gagne, \textit{Fundamentos de Sistemas Operacionais}, 9ª~ed. Rio de Janeiro: LTC, 2015.
+
+\bibitem{stallings}
+W.~Stallings, \textit{Sistemas Operacionais: Projetos e Princípios de Implementação}, 8ª~ed. São Paulo: Pearson, 2015.
+
+\bibitem{jain1984}
+R.~Jain, D.-M. Chiu, e W.~R. Hawe, ``A Quantitative Measure of Fairness and Constrained Resource Allocation for Computing Systems,'' \textit{DEC Research Report TR-301}, Digital Equipment Corporation, 1984.
 \end{thebibliography}
 
 \end{document}
