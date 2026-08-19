@@ -212,6 +212,14 @@ O cenário desbalanceado expõe a fragilidade extrema da política de Prioridade
 
 O algoritmo PDBH, projetado justamente para mitigar a inanição através do envelhecimento, novamente não apresentou diferença estatisticamente significativa em relação ao FCFS, com sobreposição completa de seus Intervalos de Confiança (IC95\%). Esse resultado evidencia uma limitação arquitetural central: a ausência de preempção. Em um cenário inundado de requisições, o bônus concedido por tempo de espera cresce de forma uníssona para toda a fila. Quando a CPU é finalmente liberada, o processo com maior tempo de chegada naturalmente possui o maior bônus acumulado, o que anula os pesos da fórmula e faz o PDBH degenerar para um comportamento espelhado da ordem de chegada (FCFS).
 
+\section{Análise de Sensibilidade}
+
+Para validar a estabilidade e os limites mecânicos das políticas implementadas, testes de sensibilidade foram conduzidos variando parâmetros estruturais em relação ao cenário equilibrado base.
+
+\textbf{Estabilidade Estatística (10.000 Processos):} A ampliação extrema da carga de trabalho para 10.000 processos demonstrou a estabilidade estrutural do algoritmo proposto (PDBH). O Índice de Jain manteve-se em 71,32\%, valor rigorosamente consistente com a faixa de 70,99\% observada no protocolo padrão de 1.000 processos. O tempo de \textit{Turnaround} médio escalou para 259.526,99 \textit{ticks} em virtude do enfileiramento massivo, mantendo a proporção de trocas de contexto (34.985 trocas).
+
+\textbf{Variação de \textit{Quantum} no Round Robin:} Foram testados \textit{quanta} de 2, 4 (padrão) e 8 \textit{ticks}. Os dados empíricos comprovam a relação inversamente proporcional entre o \textit{quantum} e o volume de trocas de contexto. A redução para 2 \textit{ticks} inflacionou as trocas para 22.655, resultando em uma severa degradação do \textit{Turnaround} (40.619,54 \textit{ticks}), embora tenha maximizado a equidade (Jain de 82,29\%). Em contrapartida, o \textit{quantum} de 8 \textit{ticks} reduziu as trocas para apenas 6.977, melhorando o \textit{Turnaround} (30.020,14 \textit{ticks}) sob um leve ajuste na equidade (79,98\%).
+
 \section{Conclusão}
 A execução simulada de 1.600 cargas de trabalho permitiu avaliar os algoritmos de escalonamento sob um rigoroso protocolo estatístico. Os resultados demonstram que não existe um algoritmo universalmente superior, mas sim escolhas baseadas em \textit{trade-offs} sistêmicos. A política de Prioridade não preemptiva maximiza a vazão e minimiza o \textit{Turnaround}, mas falha criticamente na equidade (Jain $\approx$ 30\% a 54\%), gerando inanição. O Round Robin garante a justiça do processador (Jain superior a 80\% em todos os cenários), mas o fatiamento do \textit{quantum} infla o volume de trocas de contexto em até três vezes, degradando o tempo de entrega.
 

@@ -1,0 +1,2 @@
+schema_version,run_id,workload_sha256,algorithm,scenario,seed,process_count,context_switch_cost,rr_quantum,makespan,mean_turnaround,context_switches,jain_slowdown_pct,status
+1,q2,70f7313368097c65ba5cc7dc92acd7d109359d046f4d8ad674d9a5362231aee2,rr,equilibrado,42,1000,1,2,66252,40619.542000000001,22655,82.298971940104963,success
