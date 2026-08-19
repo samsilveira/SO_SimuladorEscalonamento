@@ -122,8 +122,8 @@ class AnalysisIntegrationTests(unittest.TestCase):
             "summary": {
                 "expected_workloads": 400,
                 "valid_workloads": 400,
-                "expected_runs": 1600,
-                "successful_runs": 1600,
+                "expected_runs": 2000,
+                "successful_runs": 2000,
             },
         }
         (cls.experiment / "manifest.json").write_text(
@@ -164,10 +164,10 @@ class AnalysisIntegrationTests(unittest.TestCase):
 
     def test_single_command_generates_summary_and_three_300_dpi_figures(self):
         completed = self.invoke()
-        self.assertIn("1600 observacoes validas", completed.stdout)
+        self.assertIn("2000 observacoes validas", completed.stdout)
         with self.summary.open(encoding="utf-8", newline="") as stream:
             rows = list(csv.DictReader(stream))
-        self.assertEqual(48, len(rows))
+        self.assertEqual(60, len(rows))
         self.assertEqual({"100"}, {row["n"] for row in rows})
         first = next(
             row for row in rows

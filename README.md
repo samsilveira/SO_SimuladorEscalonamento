@@ -8,20 +8,55 @@ Este projeto consiste em um simulador de escalonamento de processos desenvolvido
 
 | Nome | GitHub | Contribuições Resumidas |
 | --- | --- | --- |
-| Elder Rayan Oliveira Silva | @eldrayan | *A definir* |
-| Espedito Ramom Mascena Ricarto | @RamomRicarto | *A definir* |
-| Manoel Junio Duarte da Silva | @Junio404 | *A definir* |
-| Pedro Yan Alcantara Palácio | @pedropalacioo | *A definir* |
-| Sabrina Alencar Soares | @sabrinaalencar | *A definir* |
-| Samuel Wagner Tiburi Silveira | @samsilveira | *A definir* |
-| Sebastião Sousa Soares | @SebastiaoSoares | *A definir* |
+| Elder Rayan Oliveira Silva | @eldrayan | Setup do template TeX, processos, filas, finalização do artigo e implementação do algoritmo SJF |
+| Espedito Ramom Mascena Ricarto | @RamomRicarto | Gerador pseudoaleatório (RNG), validação de CLI, geração de carga de trabalho e exportação CSV |
+| Manoel Junio Duarte da Silva | @Junio404 | Estrutura inicial, Makefile, motor de simulação por eventos e escalonadores |
+| Pedro Yan Alcantara Palácio | @pedropalacioo | Interface comum de escalonadores, FCFS, Round Robin e Prioridade |
+| Sabrina Alencar Soares | @sabrinaalencar | Apoio na finalização e revisão do artigo |
+| Samuel Wagner Tiburi Silveira | @samsilveira | Especificação/README, modelo, protocolo experimental, métricas e suíte de testes |
+| Sebastião Sousa Soares | @SebastiaoSoares | Criação e implementação do algoritmo PDBH e sua documentação |
 
 ## Tecnologias e Mecanismos
-
 - **Linguagem:** C
 - **Build:** GCC e Make
 - **Validação dinâmica:** AddressSanitizer e UndefinedBehaviorSanitizer no build de desenvolvimento
 - **Reprodutibilidade:** PCG32, workload CSV normalizado e SHA-256 implementado no próprio projeto
+
+## Estrutura
+```text
+src/                 código C
+include/             cabeçalhos
+configs/             configurações chave=valor
+tests/               testes mínimos
+scripts/             scripts auxiliares
+results/raw/         resultados brutos ignorados pelo Git
+results/consolidated resultados consolidados versionados
+results/figures      gráficos versionados
+docs/                especificações e decisões
+artigo/              entregável em formato de artigo
+```
+
+## Algoritmos
+O simulador implementa cinco políticas de escalonamento:
+- **FCFS (First-Come, First-Served):** Ordem de chegada sem preempção.
+- **Round Robin (RR):** Fatiamento de tempo com quantum configurável.
+- **Prioridade:** Política baseada em prioridade estática, estritamente não preemptiva.
+- **PDBH (Prioridade Dinâmica Baseada em Histórico):** Algoritmo próprio não preemptivo que aplica bônus de espera e penalidades por uso de CPU para mitigar inanição.
+- **SJF (Shortest Job First):** Algoritmo clássico adicional não-preemptivo que estima a próxima rajada usando média móvel exponencial.
+
+## Cenários
+O simulador executa sobre quatro cenários de carga de trabalho para avaliação estatística:
+- **Equilibrado (balanced):** Mistura de processos curtos, longos, CPU-bound e I/O-bound.
+- **I/O-Bound:** Tarefas curtas com frequentes bloqueios de E/S.
+- **CPU-Bound:** Tarefas de longa duração de CPU com poucas requisições de E/S.
+- **Desbalanceado:** Inundação de requisições de alta prioridade (70% de tarefas críticas).
+
+## Entregáveis
+- Código fonte do motor de eventos e algoritmos.
+- Suíte de testes unitários e automatizados.
+- Scripts experimentais e resultados consolidados.
+- Relatório técnico em formato de artigo científico (`artigo/`).
+- Gráficos da avaliação de Turnaround, Índice de Jain e Trocas de Contexto.
 
 ## Regras da Simulação
 
@@ -54,46 +89,52 @@ pid,arrival,priority,burst_index,burst_type,duration
 
 Seu SHA-256 é calculado sobre os bytes canônicos e registrado em todo resultado agregado. O round-trip `exportar → importar → exportar` é byte a byte idêntico.
 
-## Pré-requisitos e Dependências
+## Pré-requisitos
 
-- `gcc`
+- `gcc` >= 11
 - `make`
-- Python 3 com suporte a `venv`; o Make instala as dependencias de analise em `.venv/`
+- Python 3 >= 3.10
+- Bibliotecas Python: `matplotlib`, `numpy` (instaladas automaticamente em `.venv/` pelas rotinas do Make)
 - Opcional para editores: `bear` ou `compiledb` para gerar `compile_commands.json`
 - No Windows deste ambiente, use `mingw32-make` se `make` não estiver no PATH
 
-## Estrutura
-
-```text
-src/                 código C
-include/             cabeçalhos
-configs/             configurações chave=valor
-tests/               testes mínimos
-scripts/             scripts auxiliares
-results/raw/         resultados brutos ignorados pelo Git
-results/consolidated resultados consolidados versionados
-results/figures      gráficos versionados
-docs/                especificações e decisões
-artigo/              entregável em formato de artigo
-```
-
-## Compilação e Execução
+## Build
 
 ```sh
-make                 # build otimizado em bin/simulador
-make dev             # build com -g e sanitizers no Linux/CI
-make release         # build otimizado com -O2
-make test            # autoteste do executável
-make simulate        # execução simples documentada
-make batch           # exemplo de lote em results/raw/
-make batch-reduced   # lote rapido: 1 cenario, 2 seeds, 4 algoritmos, 10 processos
-make batch-verify    # valida a completude do experimento principal sem executar
-make analysis-deps   # cria .venv/ e instala requirements-analysis.txt
-make graphs          # valida o lote e regenera summary.csv + 3 figuras com IC95%
-                     # Para outro ID preservado: make graphs EXPERIMENT_ID=<id>
-make analyze         # análise estática do código C com GCC
-make compile_commands
-make clean           # remove build, bin e results/raw/
+make dev      # com sanitizers
+make release  # otimizado
+```
+
+## Testes
+
+```sh
+make test
+```
+
+## Simulação simples
+
+```sh
+./bin/simulador --algorithm fcfs --scenario equilibrado --seed 42 --processes 100
+```
+
+## Lote completo
+
+```sh
+make batch        # executa 1.600 simulações dos 4 algoritmos base
+make batch-sjf    # inclui o SJF no experimento
+```
+
+## Consolidação e gráficos
+
+```sh
+make graphs   # gera results/figures/
+```
+
+## Reproduzir resultados do artigo
+
+```sh
+git checkout experiment-v1
+make batch && make graphs
 ```
 
 Execução com configuração padrão e resultado agregado:
