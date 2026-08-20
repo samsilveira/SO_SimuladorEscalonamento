@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.8.19)  19 AUG 2026 19:49
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.8.19)  19 AUG 2026 22:02
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -371,14 +371,24 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
-Underfull \hbox (badness 1824) in paragraph at lines 38--40
+Underfull \hbox (badness 1824) in paragraph at lines 40--42
 \T1/lmr/bx/n/9 com-para-das três políti-cas clás-si-cas (FCFS, Round
  []
 
 
-Underfull \hbox (badness 7451) in paragraph at lines 42--44
+Underfull \hbox (badness 1796) in paragraph at lines 40--42
+\T1/lmr/bx/n/9 Robin e Pri-or-i-dade Es-tática), uma política adap-
+ []
+
+
+Underfull \hbox (badness 7451) in paragraph at lines 44--46
 []\T1/lmr/bx/it/9 Index Terms\T1/lmr/bx/n/9 ---Sistemas Op-era-cionais, Escalon
 -a-
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 55--56
+\T1/lmr/m/n/10 20.000 ex-e-cuções (1.000 car-gas in-de-pen-dentes por
  []
 
 [1{/home/samuel/.texlive2026/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/hom
@@ -387,60 +397,60 @@ e/samuel/texmf/fonts/enc/dvips/lm/lm-ec.enc}
 
 ]
 LaTeX Font Info:    Trying to load font information for OT1+lmr on input line 7
-7.
+9.
 
 (/home/samuel/texmf/tex/latex/lm/ot1lmr.fd
 File: ot1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OML+lmm on input line 7
-7.
+9.
 
 (/home/samuel/texmf/tex/latex/lm/omllmm.fd
 File: omllmm.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OMS+lmsy on input line 
-77.
+79.
 
 (/home/samuel/texmf/tex/latex/lm/omslmsy.fd
 File: omslmsy.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OMX+lmex on input line 
-77.
+79.
 
 (/home/samuel/texmf/tex/latex/lm/omxlmex.fd
 File: omxlmex.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <10> on input line 77.
+(Font)              <10> on input line 79.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <7> on input line 77.
+(Font)              <7> on input line 79.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <5> on input line 77.
-LaTeX Font Info:    Trying to load font information for U+msa on input line 77.
+(Font)              <5> on input line 79.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 79.
 
 
 (/home/samuel/texmf/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 77.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 79.
 
 
 (/home/samuel/texmf/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-Underfull \hbox (badness 2221) in paragraph at lines 95--96
+Underfull \hbox (badness 2221) in paragraph at lines 97--98
 \OML/lmm/m/it/10 Ready[]Since\OT1/lmr/m/n/10 )\OML/lmm/m/it/10 =\OT1/lmr/m/n/10
  10\OMS/lmsy/m/n/10 c$ \T1/lmr/m/n/10 (1 ponto de mel-hora a cada 10
  []
 
 
-Underfull \hbox (badness 2600) in paragraph at lines 95--96
+Underfull \hbox (badness 2600) in paragraph at lines 97--98
 \T1/lmr/m/it/10 ticks \T1/lmr/m/n/10 na fila) e a pe-nal-i-dade por CPU equiv-a
 le a
  []
 
 
-Underfull \hbox (badness 2221) in paragraph at lines 95--96
+Underfull \hbox (badness 2221) in paragraph at lines 97--98
 \OMS/lmsy/m/n/10 b\OML/lmm/m/it/10 CPU[]Consumida=\OT1/lmr/m/n/10 5\OMS/lmsy/m/
 n/10 c$ \T1/lmr/m/n/10 (1 ponto de pi-ora a cada 5
  []
@@ -451,59 +461,68 @@ c/dvips/lm/lm-mathit.enc}{/home/samuel/texmf/fonts/enc/dvips/lm/lm-mathsy.enc}]
 File: ../results/figures/mean_turnaround_ic95.png Graphic file (type png)
 <use ../results/figures/mean_turnaround_ic95.png>
 Package pdftex.def Info: ../results/figures/mean_turnaround_ic95.png  used on i
-nput line 112.
+nput line 114.
 (pdftex.def)             Requested size: 252.0pt x 148.90543pt.
 <../results/figures/jain_slowdown_pct_ic95.png, id=25, 794.97pt x 469.755pt>
 File: ../results/figures/jain_slowdown_pct_ic95.png Graphic file (type png)
 <use ../results/figures/jain_slowdown_pct_ic95.png>
 Package pdftex.def Info: ../results/figures/jain_slowdown_pct_ic95.png  used on
- input line 118.
+ input line 120.
 (pdftex.def)             Requested size: 252.0pt x 148.90543pt.
 <../results/figures/context_switches_ic95.png, id=26, 794.97pt x 469.755pt>
 File: ../results/figures/context_switches_ic95.png Graphic file (type png)
 <use ../results/figures/context_switches_ic95.png>
 Package pdftex.def Info: ../results/figures/context_switches_ic95.png  used on 
-input line 124.
+input line 126.
 (pdftex.def)             Requested size: 252.0pt x 148.90543pt.
 
-Underfull \hbox (badness 10000) in paragraph at lines 133--134
-[]\T1/lmr/m/n/10 Round Robin: 33.817,33 [IC95%: 33.624,15 --
+Underfull \hbox (badness 10000) in paragraph at lines 135--136
+[]\T1/lmr/m/n/10 Round Robin: 33.723,02 [IC95%: 33.661,05 --
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 152--153
-[]\T1/lmr/m/n/10 Round Robin: 35.607,17 [IC95%: 35.554,87 --
+Underfull \hbox (badness 2302) in paragraph at lines 150--151
+\T1/lmr/m/n/10 en-quanto os al-go-rit-mos não pre-emp-tivos reg-is-traram
  []
 
 
-Underfull \hbox (badness 1939) in paragraph at lines 165--166
-[]\T1/lmr/m/n/10 O número de Tro-cas de Con-texto acom-pan-hou a
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 171--172
-[]\T1/lmr/m/n/10 Round Robin: 72.641,57 [IC95%: 72.367,75 --
+Underfull \hbox (badness 10000) in paragraph at lines 156--157
+[]\T1/lmr/m/n/10 Round Robin: 35.593,93 [IC95%: 35.574,73 --
  []
 
 [3 <../results/figures/mean_turnaround_ic95.png> <../results/figures/jain_slowd
 own_pct_ic95.png> <../results/figures/context_switches_ic95.png>]
-Underfull \hbox (badness 10000) in paragraph at lines 190--191
-[]\T1/lmr/m/n/10 Round Robin: 33.841,36 [IC95%: 33.663,37 --
+Underfull \hbox (badness 10000) in paragraph at lines 177--178
+[]\T1/lmr/m/n/10 Round Robin: 72.641,09 [IC95%: 72.552,91 --
  []
 
 
-Underfull \hbox (badness 1442) in paragraph at lines 203--204
-[]\T1/lmr/m/n/10 As Tro-cas de Con-texto man-tiveram o padrão dos
+Underfull \hbox (badness 10000) in paragraph at lines 198--199
+[]\T1/lmr/m/n/10 Round Robin: 33.808,46 [IC95%: 33.745,21 --
  []
 
 
-Underfull \hbox (badness 1484) in paragraph at lines 212--213
-[]\T1/lmr/m/n/10 Em re-lação ao al-go-ritmo de-sen-volvido pela equipe
+Underfull \hbox (badness 2469) in paragraph at lines 216--217
+[]\T1/lmr/m/n/10 A análise es-tatís-tica mas-siva de 20.000 ex-e-cuções
  []
 
+
+Underfull \hbox (badness 2707) in paragraph at lines 216--217
+\T1/lmr/m/n/10 con-firma cat-e-gori-ca-mente os \T1/lmr/m/it/10 trade-offs \T1/
+lmr/m/n/10 sistêmi-cos. A
+ []
+
+<../results/figures/comparativo_convergencia_ic95.png, id=34, 1011.78pt x 722.7
+pt>
+File: ../results/figures/comparativo_convergencia_ic95.png Graphic file (type p
+ng)
+<use ../results/figures/comparativo_convergencia_ic95.png>
+Package pdftex.def Info: ../results/figures/comparativo_convergencia_ic95.png  
+used on input line 235.
+(pdftex.def)             Requested size: 252.0pt x 180.00188pt.
 [4]
 LaTeX Font Info:    Trying to load font information for TS1+lmr on input line 2
-30.
+45.
  (/home/samuel/texmf/tex/latex/lm/ts1lmr.fd
 File: ts1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
@@ -520,20 +539,20 @@ Before submitting the final camera ready copy, remember to:
 
 [5{/home/samuel/texmf/fonts/enc/dvips/lm/lm-ts1.enc}
 
-] (./main.aux)
+ <../results/figures/comparativo_convergencia_ic95.png>] (./main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-03-20>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 5256 strings out of 469652
- 85705 string characters out of 5475536
- 505976 words of memory out of 6000000
- 33697 multiletter control sequences out of 15000+600000
+ 5264 strings out of 469652
+ 86135 string characters out of 5475536
+ 508998 words of memory out of 6000000
+ 33705 multiletter control sequences out of 15000+600000
  811153 words of font info for 139 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 57i,8n,65p,1147b,280s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 57i,8n,65p,1195b,280s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </home/samuel/texmf/fonts/type1/public/lm/lmbx10.pfb></home/samuel/texmf/font
 s/type1/public/lm/lmbx9.pfb></home/samuel/texmf/fonts/type1/public/lm/lmbxi10.p
 fb></home/samuel/texmf/fonts/type1/public/lm/lmcsc10.pfb></home/samuel/texmf/fo
@@ -544,10 +563,10 @@ b></home/samuel/texmf/fonts/type1/public/lm/lmr7.pfb></home/samuel/texmf/fonts/
 type1/public/lm/lmr8.pfb></home/samuel/texmf/fonts/type1/public/lm/lmri10.pfb><
 /home/samuel/texmf/fonts/type1/public/lm/lmri8.pfb></home/samuel/texmf/fonts/ty
 pe1/public/lm/lmsy10.pfb></home/samuel/texmf/fonts/type1/public/lm/lmsy7.pfb>
-Output written on main.pdf (5 pages, 1032377 bytes).
+Output written on main.pdf (5 pages, 1515089 bytes).
 PDF statistics:
- 113 PDF objects out of 1000 (max. 8388607)
+ 115 PDF objects out of 1000 (max. 8388607)
  67 compressed objects within 1 object stream
  0 named destinations out of 1000 (max. 500000)
- 16 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 21 words of extra memory for PDF output out of 10000 (max. 10000000)
 

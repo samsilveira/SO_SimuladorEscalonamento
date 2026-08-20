@@ -120,7 +120,7 @@ make test
 ## Lote completo
 
 ```sh
-make batch        # executa 1.600 simulações dos 4 algoritmos base
+make batch        # executa 20.000 simulações das 5 políticas (4 cenários x 1.000 seeds)
 make batch-sjf    # inclui o SJF no experimento
 ```
 
@@ -180,12 +180,12 @@ Valores `double` usam 17 algarismos significativos. Todas as saídas persistente
 ## Executor experimental
 
 O executor da matriz principal usa apenas Python 3 e sua biblioteca padrão. Ele cria
-400 workloads, reutiliza cada carga nas quatro políticas e registra as 1.600 execuções
+4.000 workloads (1.000 sementes por cenário), reutiliza cada carga nas cinco políticas e registra as 20.000 execuções
 em um manifesto atualizado atomicamente:
 
 ```sh
 make release
-python3 scripts/run_experiment.py --experiment-id main-2026-08
+python3 scripts/run_experiment.py --experiment-id main-2026-08 --include-sjf
 ```
 
 Os artefatos ficam em `results/raw/<experiment-id>/{manifest.json,workloads,runs}`.
