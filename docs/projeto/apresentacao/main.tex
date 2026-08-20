@@ -1,0 +1,284 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{lmodern}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+
+\definecolor{azulSO}{HTML}{173B57}
+\definecolor{azulClaro}{HTML}{2D7FA3}
+\definecolor{verdeSO}{HTML}{2A8C6A}
+\definecolor{laranjaSO}{HTML}{D97A2B}
+\definecolor{cinzaSO}{HTML}{F2F5F7}
+\definecolor{textoSO}{HTML}{263238}
+
+\usetheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamercolor{normal text}{fg=textoSO,bg=white}
+\setbeamercolor{structure}{fg=azulSO}
+\setbeamercolor{frametitle}{fg=white,bg=azulSO}
+\setbeamercolor{block title}{fg=white,bg=azulClaro}
+\setbeamercolor{block body}{fg=textoSO,bg=cinzaSO}
+\setbeamercolor{alerted text}{fg=laranjaSO}
+\setbeamerfont{frametitle}{series=\bfseries}
+\setbeamertemplate{itemize item}{\color{azulClaro}$\blacktriangleright$}
+\setbeamertemplate{itemize subitem}{\color{verdeSO}$\bullet$}
+\setbeamertemplate{footline}{%
+  \leavevmode\hbox{%
+    \begin{beamercolorbox}[wd=.78\paperwidth,ht=2.7ex,dp=1.1ex,leftskip=1em]{author in head/foot}%
+      \color{azulSO}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.22\paperwidth,ht=2.7ex,dp=1.1ex,rightskip=1em plus1fil]{date in head/foot}%
+      \color{azulSO}\hfill\insertframenumber/\inserttotalframenumber
+    \end{beamercolorbox}}}
+
+% Os PNGs ficam ao lado deste arquivo no projeto do Overleaf.
+% Os limites simultâneos preservam a proporção, sem cortar ou deformar.
+\newcommand{\figuraresultado}[1]{%
+  \includegraphics[width=.94\textwidth,height=.68\textheight,keepaspectratio]{#1}}
+
+\title[Simulador de Escalonamento]{Simulador de Escalonamento de Processos}
+\subtitle{Sistemas Operacionais — Projeto da Unidade 3}
+\author[Equipe]{Elder Rayan Oliveira Silva \quad Espedito Ramom Mascena Ricarto \\
+Manoel Junio Duarte da Silva \quad Pedro Yan Alcantara Palácio \\
+Sabrina Alencar Soares \quad Samuel Wagner Tiburi Silveira \\
+Sebastião Sousa Soares}
+\date{Agosto de 2026}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+  \vfill
+  \centering
+  \small Universidade Federal do Cariri — UFCA
+\end{frame}
+
+\begin{frame}{Por que comparar escalonadores?}
+  \begin{columns}[T,onlytextwidth]
+    \column{.55\textwidth}
+      \begin{block}{Motivação}
+        A política de escalonamento afeta desempenho, justiça e custo operacional do sistema.
+      \end{block}
+      \begin{itemize}
+        \item Simular estados, filas, E/S e preempção
+        \item Comparar políticas com métricas quantitativas
+        \item Avaliar um algoritmo próprio de forma reproduzível
+      \end{itemize}
+    \column{.42\textwidth}
+      \begin{block}{Fluxo do projeto}
+        \centering
+        Carga com seed\\[.4em]
+        $\downarrow$\\[.4em]
+        Simulação em ticks\\[.4em]
+        $\downarrow$\\[.4em]
+        Métricas + IC95\%\\[.4em]
+        $\downarrow$\\[.4em]
+        Análise crítica
+      \end{block}
+  \end{columns}
+  \vfill
+  \scriptsize Troca de contexto: 1 tick entre PIDs distintos; não conta no primeiro despacho nem após ociosidade.
+\end{frame}
+
+\begin{frame}{Modelo de processo e de E/S}
+  \centering
+  \begin{tikzpicture}[node distance=5mm and 4mm,
+    state/.style={draw=azulClaro,rounded corners,fill=cinzaSO,minimum width=19mm,minimum height=8mm,font=\small},
+    arrow/.style={->,thick,color=azulSO}]
+    \node[state] (n) {Novo};
+    \node[state,right=of n] (p) {Pronto};
+    \node[state,right=of p] (e) {Executando};
+    \node[state,right=of e] (b) {Bloqueado};
+    \node[state,right=of b] (f) {Finalizado};
+    \draw[arrow] (n)--(p); \draw[arrow] (p)--(e);
+    \draw[arrow] (e)--(b); \draw[arrow,bend left=28] (b) to (p);
+    \draw[arrow] (e) to[bend left=20] (f);
+  \end{tikzpicture}
+  \vspace{.8em}
+  \begin{columns}[T,onlytextwidth]
+    \column{.49\textwidth}
+      \begin{block}{Processo}
+        PID, chegada, prioridade, estado e rajadas alternadas:
+        \[\text{CPU}\rightarrow\text{E/S}\rightarrow\text{CPU}\]
+        Fila de prontos contém apenas processos aptos.
+      \end{block}
+    \column{.49\textwidth}
+      \begin{block}{Escolha de modelagem}
+        E/S paralela entre processos, sem dispositivo ou fila própria. O retorno ocorre ao fim da duração sorteada.
+
+        \alert{Limitação:} não mede contenção de dispositivos e pode favorecer cargas I/O-bound.
+      \end{block}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cargas iguais, comparação justa}
+  \begin{columns}[T,onlytextwidth]
+    \column{.52\textwidth}
+      \begin{block}{Reprodutibilidade}
+        \begin{itemize}
+          \item PCG32 controlado por seed de 64 bits
+          \item Chegadas acumuladas em intervalos de 0 a 3 ticks
+          \item Workload CSV reutilizado por todos os algoritmos
+          \item SHA-256 identifica a carga exata
+          \item Execução em lote pode ser interrompida e retomada
+        \end{itemize}
+      \end{block}
+    \column{.45\textwidth}
+      \begin{block}{Quatro cenários obrigatórios}
+        \begin{enumerate}
+          \item Equilibrado
+          \item I/O-bound
+          \item CPU-bound
+          \item Prioridades desbalanceadas
+        \end{enumerate}
+      \end{block}
+      \centering
+      \textbf{seed + cenário}\quad$\Longrightarrow$\quad\textbf{mesma carga}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Algoritmos de referência}
+  \small
+  \begin{tabular}{@{}p{.17\textwidth}p{.48\textwidth}p{.22\textwidth}@{}}
+    \toprule
+    \textbf{Política} & \textbf{Critério de escolha} & \textbf{Preempção} \\
+    \midrule
+    FCFS & Maior tempo contínuo na fila & Não \\
+    Round Robin & Fila FIFO; quantum padrão de 4 ticks & Sim, por quantum \\
+    Prioridade & Menor valor numérico (0 é mais prioritário) & Não \\
+    SJF extra & Menor próxima rajada estimada pelo histórico & Não \\
+    \bottomrule
+  \end{tabular}
+  \vspace{1em}
+  \begin{block}{Decisões que tornam a comparação reproduzível}
+    Empates usam tempo na fila e PID; todos recebem os mesmos eventos, custos e cargas. Nenhum escalonador conhece rajadas futuras, CPU restante ou processos ainda não admitidos.
+  \end{block}
+\end{frame}
+
+\begin{frame}{PDBH: Prioridade Dinâmica Baseada em Histórico}
+  \begin{columns}[T,onlytextwidth]
+    \column{.54\textwidth}
+      \begin{block}{Problema e proposta}
+        Mitigar inanição da prioridade estática combinando \textit{aging} e penalidade pelo uso observado da CPU.
+      \end{block}
+      \[
+        \text{score}=\text{prioridade}
+        -\left\lfloor\frac{\text{espera}}{10}\right\rfloor
+        +\left\lfloor\frac{\text{CPU consumida}}{5}\right\rfloor
+      \]
+      Menor score vence; empate por tempo na fila e PID.
+    \column{.43\textwidth}
+      \begin{block}{O que o diferencia}
+        \begin{itemize}
+          \item Recalcula a ordem em cada despacho
+          \item Usa apenas presente e histórico
+          \item Não altera a prioridade original
+          \item Permanece não preemptivo
+        \end{itemize}
+      \end{block}
+      \alert{Hipótese:} beneficiar quem espera e penalizar quem já consumiu mais CPU.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Como avaliamos desempenho e justiça}
+  \begin{columns}[T,onlytextwidth]
+    \column{.52\textwidth}
+      \begin{align*}
+        \text{turnaround}_i &= C_i-A_i \\
+        \text{ideal}_i &= \sum CPU_i+\sum E/S_i \\
+        \text{slowdown}_i &= \frac{\text{turnaround}_i}{\text{ideal}_i}
+      \end{align*}
+      \begin{block}{Trocas de contexto}
+        Mudanças diretas entre PIDs: custo potencial do escalonador.
+      \end{block}
+    \column{.45\textwidth}
+      \begin{block}{Justiça de Jain}
+        \[
+          J=\frac{(\sum s_i)^2}{n\sum s_i^2}\times100
+        \]
+        Próximo de 100\% indica slowdowns semelhantes.
+      \end{block}
+      \alert{Justiça não basta:} todos podem ser igualmente lentos. Jain deve ser interpretado junto ao turnaround.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Protocolo experimental e rastreabilidade}
+  \begin{columns}[T,onlytextwidth]
+    \column{.55\textwidth}
+      \centering
+      {\Large\bfseries 4 cenários $\times$ 1.000 seeds}\par
+      \vspace{.3em}
+      {\Large\bfseries $\times$ 5 algoritmos = 20.000 execuções}\par
+      \vspace{.8em}
+      {\large 1.000 processos por carga}\par
+      \vspace{.8em}
+      Média e intervalo de confiança de 95\%
+    \column{.42\textwidth}
+      \begin{block}{Rastreabilidade}
+        \begin{itemize}
+          \item Configuração e seeds versionadas
+          \item Manifestos e hashes
+          \item CSVs consolidados
+          \item Testes unitários e integração
+          \item Gráficos gerados por script
+        \end{itemize}
+      \end{block}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Resultado 1: turnaround médio}
+  \centering
+  \figuraresultado{mean_turnaround_ic95.png}
+
+  \small \textbf{Leitura:} Prioridade teve o menor turnaround em três cenários e SJF no I/O-bound; RR apresentou o maior, especialmente em CPU-bound. Barras mostram média e IC95\%, em ticks.
+\end{frame}
+
+\begin{frame}{Resultado 2: justiça de Jain do slowdown}
+  \centering
+  \figuraresultado{jain_slowdown_pct_ic95.png}
+
+  \small \textbf{Leitura:} RR alcança alta justiça, sobretudo em CPU-bound; Prioridade apresenta a maior desigualdade. O eixo vertical está em porcentagem e as hastes representam IC95\%.
+\end{frame}
+
+\begin{frame}{Resultado 3: trocas de contexto}
+  \centering
+  \figuraresultado{context_switches_ic95.png}
+
+  \small \textbf{Leitura:} a preempção do RR eleva o custo, sobretudo em CPU-bound. O eixo vertical representa quantidade de trocas e as hastes, IC95\%.
+\end{frame}
+
+\begin{frame}{Convergência com o aumento da amostra}
+  \centering
+  \figuraresultado{comparativo_convergencia_ic95.png}
+
+  \small \textbf{Leitura:} as médias estabilizam progressivamente e os IC95\% estreitam de $N=10$ a $N=1.000$, aumentando a precisão sem alterar a tendência geral.
+\end{frame}
+
+\begin{frame}{Conclusão: o PDBH respondeu à hipótese}
+  \begin{columns}[T,onlytextwidth]
+    \column{.55\textwidth}
+      \begin{block}{O que os dados mostraram}
+        \begin{itemize}
+          \item PDBH não apresentou vantagem prática nos cenários avaliados
+          \item IC95\% praticamente sobreposto ao FCFS
+          \item Mesmo número de trocas de FCFS e Prioridade
+          \item Custo extra: recalcular a pontuação da fila
+        \end{itemize}
+      \end{block}
+    \column{.42\textwidth}
+      \begin{block}{Por quê?}
+        Sem preempção, processos esperam juntos e acumulam bônus semelhantes. A pontuação tende a preservar a ordem de chegada.
+      \end{block}
+      \alert{Conclusão:} neste modelo, o histórico dinâmico isolado não trouxe ganho. Próximo passo: investigar um PDBH preemptivo.
+  \end{columns}
+  \vfill
+  \centering\small Código testado • resultados consolidados • artigo científico • responsabilidades registradas
+\end{frame}
+
+\end{document}
