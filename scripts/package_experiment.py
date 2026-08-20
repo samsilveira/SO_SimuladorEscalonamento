@@ -160,9 +160,16 @@ def create_archive(experiment_dir: Path, relative_files: list[Path], target: Pat
 
 
 def published_hashes(repo: Path, summary: Path, figures_dir: Path) -> dict[str, str]:
-    paths = [summary, *sorted(figures_dir.glob("*.png"))]
-    if len(paths) != 4 or any(not path.is_file() for path in paths):
-        raise EvidenceError("summary.csv e os tres graficos PNG devem existir")
+    required_figures = {
+        "mean_turnaround_ic95.png",
+        "context_switches_ic95.png",
+        "jain_slowdown_pct_ic95.png",
+    }
+    figures = sorted(figures_dir.glob("*.png"))
+    if (not summary.is_file()
+            or not required_figures.issubset({path.name for path in figures})):
+        raise EvidenceError("summary.csv e os tres graficos principais devem existir")
+    paths = [summary, *figures]
     return {os.path.relpath(path, repo): sha256(path) for path in paths}
 
 
@@ -205,8 +212,8 @@ def execute(args: argparse.Namespace) -> int:
     figures_dir = (repo / args.figures_dir).resolve()
 
     observations = analyze_experiment.load_observations(experiment_dir, repo)
-    if len(observations) != 2000:
-        raise EvidenceError("a validacao nao retornou as 2.000 observacoes canonicas")
+    if len(observations) != 20000:
+        raise EvidenceError("a validacao nao retornou as 20.000 observacoes canonicas")
     manifest_path = experiment_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     tag, commit, runner_sha256 = validate_frozen_revision(manifest, repo)
@@ -229,7 +236,7 @@ def execute(args: argparse.Namespace) -> int:
         if actual_record != expected_record:
             raise EvidenceError("registro de evidencia diverge dos artefatos atuais")
         print(
-            f"Evidencia valida: {tag}, 400 workloads, 2000 resultados, "
+            f"Evidencia valida: {tag}, 4000 workloads, 20000 resultados, "
             f"arquivo {archive.name} ({archive.stat().st_size} bytes)."
         )
         return 0

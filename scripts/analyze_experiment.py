@@ -21,7 +21,7 @@ from typing import Iterable
 SCHEMA_VERSION = 1
 SCENARIOS = ("equilibrado", "io_bound", "cpu_bound", "prioridades_desbalanceadas")
 ALGORITHMS = ("fcfs", "rr", "prioridade", "proprio", "sjf")
-SEEDS = tuple(range(1, 101))
+SEEDS = tuple(range(1, 1001))
 PROCESS_COUNT = 1000
 CONTEXT_SWITCH_COST = 1
 RR_QUANTUM = 4
@@ -419,7 +419,6 @@ def render_figures(rows: list[dict[str, object]], temporary_paths: dict[str, Pat
                 error_kw={"ecolor": "black", "elinewidth": 1.1, "capthick": 1.1},
             )
         axis.set_title(str(metadata["title"]), fontweight="bold")
-        axis.set_xlabel("Cenário")
         axis.set_ylabel(str(metadata["label"]))
         axis.set_xticks(group_centers, [SCENARIO_LABELS[item] for item in SCENARIOS])
         axis.grid(axis="y", color="#d9d9d9", linewidth=0.7)
@@ -429,7 +428,7 @@ def render_figures(rows: list[dict[str, object]], temporary_paths: dict[str, Pat
             ncols=1, frameon=True, borderaxespad=0,
         )
         axis.text(
-            0.5, -0.15, "Barras: média; hastes: IC95% = média ± 1,96 × s/√n; n = 100",
+            0.5, -0.15, "Barras: média; hastes: IC95% = média ± 1,96 × s/√n; n = 1000",
             transform=axis.transAxes, ha="center", va="top", fontsize=9,
         )
         figure.savefig(
@@ -508,7 +507,7 @@ def execute(args: argparse.Namespace) -> list[Path]:
 if __name__ == "__main__":
     try:
         generated = execute(parse_args())
-        print("Consolidacao concluida: 2000 observacoes validas, 60 linhas estatisticas.")
+        print("Consolidacao concluida: 20000 observacoes validas, 60 linhas estatisticas.")
         for generated_path in generated:
             print(generated_path)
     except (AnalysisError, OSError, ValueError) as error:
