@@ -51,13 +51,13 @@ class ExperimentRunnerTests(unittest.TestCase):
         config = {
             "effective": {"process_count": 1000, "context_switch_cost": 1, "rr_quantum": 4},
             "scenarios": list(RUNNER_API["SCENARIOS"]),
-            "seeds": {"first": 1, "last": 100},
+            "seeds": {"first": 1, "last": 1000},
             "algorithms": list(RUNNER_API["ALGORITHMS"]),
         }
         workloads, runs = RUNNER_API["matrix_specs"](config)
-        self.assertEqual(400, len(workloads))
-        self.assertEqual(1600, len(runs))
-        self.assertEqual(1600, len({run["run_id"] for run in runs}))
+        self.assertEqual(4000, len(workloads))
+        self.assertEqual(16000, len(runs))
+        self.assertEqual(16000, len({run["run_id"] for run in runs}))
 
     def test_sjf_comparison_adds_runs_without_changing_required_matrix(self):
         required = RUNNER_API["REQUIRED_ALGORITHMS"]
@@ -67,13 +67,13 @@ class ExperimentRunnerTests(unittest.TestCase):
         config = {
             "effective": {"process_count": 1000, "context_switch_cost": 1, "rr_quantum": 4},
             "scenarios": list(RUNNER_API["SCENARIOS"]),
-            "seeds": {"first": 1, "last": 100},
+            "seeds": {"first": 1, "last": 1000},
             "algorithms": list(comparison),
         }
         workloads, runs = RUNNER_API["matrix_specs"](config)
-        self.assertEqual(400, len(workloads))
-        self.assertEqual(2000, len(runs))
-        self.assertEqual(2000, len({run["run_id"] for run in runs}))
+        self.assertEqual(4000, len(workloads))
+        self.assertEqual(20000, len(runs))
+        self.assertEqual(20000, len({run["run_id"] for run in runs}))
 
     def test_reduced_sjf_profile_reuses_each_workload_for_five_algorithms(self):
         completed = self.invoke(experiment="sjf", extra=("--include-sjf",))
@@ -95,7 +95,7 @@ class ExperimentRunnerTests(unittest.TestCase):
 
     def test_execution_profiles_have_explicit_reproducible_shapes(self):
         shape = RUNNER_API["execution_shape"]
-        self.assertEqual((RUNNER_API["SCENARIOS"], 1, 100, 1000), shape(False, False))
+        self.assertEqual((RUNNER_API["SCENARIOS"], 1, 1000, 1000), shape(False, False))
         self.assertEqual((RUNNER_API["SCENARIOS"], 1, 10, 1000), shape(False, True))
         self.assertEqual((("equilibrado",), 1, 2, 10), shape(True, False))
 

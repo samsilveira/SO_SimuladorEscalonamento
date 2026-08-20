@@ -205,8 +205,8 @@ def execute(args: argparse.Namespace) -> int:
     figures_dir = (repo / args.figures_dir).resolve()
 
     observations = analyze_experiment.load_observations(experiment_dir, repo)
-    if len(observations) != 2000:
-        raise EvidenceError("a validacao nao retornou as 2.000 observacoes canonicas")
+    if len(observations) != 20000:
+        raise EvidenceError("a validacao nao retornou as 20.000 observacoes canonicas")
     manifest_path = experiment_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     tag, commit, runner_sha256 = validate_frozen_revision(manifest, repo)
@@ -229,7 +229,7 @@ def execute(args: argparse.Namespace) -> int:
         if actual_record != expected_record:
             raise EvidenceError("registro de evidencia diverge dos artefatos atuais")
         print(
-            f"Evidencia valida: {tag}, 400 workloads, 2000 resultados, "
+            f"Evidencia valida: {tag}, 4000 workloads, 20000 resultados, "
             f"arquivo {archive.name} ({archive.stat().st_size} bytes)."
         )
         return 0

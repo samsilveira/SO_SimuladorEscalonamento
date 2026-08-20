@@ -73,7 +73,7 @@ simulate: release
 	./$(TARGET_RELEASE) --config configs/default.conf --algorithm fcfs
 
 batch: release
-	$(PYTHON) scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE)
+	$(PYTHON) scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE) --include-sjf
 
 batch-reduced: release
 	$(PYTHON) scripts/run_experiment.py --experiment-id smoke --binary $(TARGET_RELEASE) --reduced
@@ -85,7 +85,7 @@ pilot-verify: release
 	$(PYTHON) scripts/run_experiment.py --experiment-id $(PILOT_ID) --binary $(TARGET_RELEASE) --pilot --verify-only
 
 batch-verify: release
-	$(PYTHON) scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE) --verify-only
+	$(PYTHON) scripts/run_experiment.py --experiment-id main --binary $(TARGET_RELEASE) --include-sjf --verify-only
 
 batch-sjf: release
 	$(PYTHON) scripts/run_experiment.py --experiment-id $(SJF_EXPERIMENT_ID) --binary $(TARGET_RELEASE) --include-sjf
@@ -101,6 +101,9 @@ graphs: analysis-deps
 		--experiment-dir results/raw/$(EXPERIMENT_ID) \
 		--summary-output results/consolidated/summary.csv \
 		--figures-dir results/figures
+
+comparison-graphs: analysis-deps
+	$(VENV_PYTHON) scripts/generate_sample_comparison.py
 
 evidence: analysis-deps
 	$(VENV_PYTHON) scripts/package_experiment.py \
