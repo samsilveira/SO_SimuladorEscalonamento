@@ -5,7 +5,7 @@
 - **Duração total:** 10 minutos exatos, de `00:00` a `10:00`.
 - **Formato sugerido:** sete falas contínuas, sem intervalo entre integrantes.
 - **Ritmo:** conversação clara, sem acelerar; cada integrante deve ensaiar respeitando o encerramento indicado para sua fala.
-- **Apoio visual:** usar a capa e os onze quadros de `apresentacao/main.tex`. Deixar a capa projetada antes do início e iniciar o cronômetro ao avançar para o primeiro quadro de conteúdo. Alguns blocos usam dois ou quatro quadros, mas a troca deve ocorrer durante a fala, sem pausa. Cada gráfico ocupa um quadro completo para preservar título, cenários, cinco algoritmos, unidade, média e IC95%.
+- **Apoio visual:** usar a capa e os doze quadros de `apresentacao/main.tex`. Deixar a capa projetada antes do início e iniciar o cronômetro ao avançar para o primeiro quadro de conteúdo. Alguns blocos usam mais de um quadro, mas a troca deve ocorrer durante a fala, sem pausa. Cada gráfico ocupa um quadro completo para preservar sua legibilidade.
 - **Regra de transição:** quem termina chama imediatamente o próximo integrante pela ideia indicada no fim da fala. As transições já fazem parte do tempo de cada bloco.
 
 ## Visão do tempo
@@ -87,11 +87,11 @@
 
 ### 6. `07:05–08:35` — Samuel Wagner: métricas, testes e experimento
 
-**Quadros 6 e 7:** definições das três métricas e protocolo `4 cenários × 100 seeds × 5 algoritmos = 2.000 execuções`.
+**Quadros 6 e 7:** definições das três métricas e protocolo `4 cenários × 1.000 seeds × 5 algoritmos = 20.000 execuções`.
 
 > Avaliamos cada política por três perspectivas. Turnaround é conclusão menos chegada. Trocas de contexto contam mudanças diretas entre processos. Slowdown divide o turnaround pela soma ideal de CPU e entrada e saída; o índice de Jain compara esses slowdowns. Próximo de cem por cento significa atrasos mais equilibrados, mas justiça deve ser lida junto ao turnaround: todos podem ser igualmente lentos.
 >
-> O experimento final combina quatro cenários, cem seeds e cinco algoritmos, totalizando duas mil execuções com mil processos em cada carga. Os scripts consolidam os CSVs, calculam média e intervalo de confiança de 95% e geram os três gráficos apresentados no artigo. Manifestos registram configuração, versão do código e hashes dos artefatos, permitindo auditar e repetir o lote.
+> O experimento final combina quatro cenários, mil seeds e cinco algoritmos, totalizando vinte mil execuções com mil processos em cada carga. Os scripts consolidam os CSVs, calculam média e intervalo de confiança de 95% e geram os gráficos apresentados no artigo. Manifestos registram configuração, versão do código e hashes dos artefatos, documentando as condições necessárias para verificar ou repetir o lote.
 >
 > A confiabilidade não depende apenas do resultado final. Há testes de processos, filas, escalonadores, simulação, configuração, importação e exportação de workloads, linha de comando, análise e evidências. Também verificamos determinismo, transições válidas, cálculos das métricas, retomada do experimento e publicação segura dos arquivos, evitando resultados incompletos.
 >
@@ -99,15 +99,15 @@
 
 ### 7. `08:35–10:00` — Sabrina Alencar: resultados e conclusão
 
-**Quadros 8 a 11:** um quadro completo para cada gráfico — turnaround, Jain e trocas — e a síntese “Prioridade: menor turnaround”, “RR: maior justiça e mais trocas”, “PDBH ≈ FCFS”.
+**Quadros 8 a 12:** gráficos de turnaround, Jain, trocas e convergência, seguidos da síntese “Prioridade/SJF: menor turnaround”, “RR: alta justiça e mais trocas”, “PDBH próximo do FCFS”.
 
-> Não existe um único algoritmo melhor em tudo. A Prioridade Estática apresentou o menor turnaround médio nos quatro cenários, mas teve a pior equidade. Nos cenários equilibrado e desbalanceado, seu índice de Jain ficou próximo de 31%, sinal de grande desigualdade entre processos.
+> Não existe um único algoritmo melhor em tudo. A Prioridade Estática apresentou o menor turnaround médio em três cenários, enquanto o SJF foi melhor no I/O-bound; a Prioridade, porém, teve a pior equidade. Nos cenários equilibrado e desbalanceado, seu índice de Jain ficou próximo de 31%, sinal de grande desigualdade entre processos.
 >
 > O Round Robin seguiu o comportamento oposto. Ele alcançou boa justiça, chegando a aproximadamente 96% no cenário CPU-bound e 97% no I/O-bound. Porém, pagou por isso com maior turnaround e muitas trocas de contexto: no CPU-bound foram mais de vinte mil, contra cerca de duas mil nas políticas não preemptivas.
 >
-> O resultado mais importante foi o PDBH. Seus intervalos de confiança ficaram praticamente sobrepostos aos do FCFS. Como ele não interrompe a rajada atual, os processos aguardam juntos e acumulam bônus parecidos; na prática, a pontuação tende a reproduzir a ordem de chegada, acrescentando cálculo sem ganho mensurável.
+> O PDBH não apresentou vantagem prática sobre o FCFS nos cenários avaliados, e seus intervalos de confiança ficaram praticamente sobrepostos. Como ele não interrompe a rajada atual, os processos aguardam juntos e acumulam bônus parecidos, reduzindo o efeito da pontuação dinâmica. A curva de convergência mostra ainda que as médias já se estabilizam por volta de cem seeds e que a ampliação para mil estreita os intervalos de confiança.
 >
-> O experimento respondeu à pergunta proposta: histórico dinâmico, sozinho e sem preempção, não melhorou o escalonamento neste modelo. Entregamos código testado, cargas reproduzíveis, duas mil execuções auditáveis, gráficos e artigo, além de um caminho futuro: investigar uma versão preemptiva do PDBH. Obrigada.
+> O experimento respondeu à pergunta proposta: histórico dinâmico, sozinho e sem preempção, não melhorou o escalonamento neste modelo. Entregamos código testado, cargas reproduzíveis, vinte mil execuções consolidadas, gráficos e artigo, além de um caminho futuro: investigar uma versão preemptiva do PDBH. Obrigada.
 
 ## Base da atribuição das falas
 

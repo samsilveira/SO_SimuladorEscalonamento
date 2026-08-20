@@ -208,19 +208,19 @@ Sebastião Sousa Soares}
   \end{columns}
 \end{frame}
 
-\begin{frame}{Protocolo experimental e auditoria}
+\begin{frame}{Protocolo experimental e rastreabilidade}
   \begin{columns}[T,onlytextwidth]
     \column{.55\textwidth}
       \centering
-      {\Large\bfseries 4 cenários $\times$ 100 seeds}\par
+      {\Large\bfseries 4 cenários $\times$ 1.000 seeds}\par
       \vspace{.3em}
-      {\Large\bfseries $\times$ 5 algoritmos = 2.000 execuções}\par
+      {\Large\bfseries $\times$ 5 algoritmos = 20.000 execuções}\par
       \vspace{.8em}
       {\large 1.000 processos por carga}\par
       \vspace{.8em}
       Média e intervalo de confiança de 95\%
     \column{.42\textwidth}
-      \begin{block}{Evidências reproduzíveis}
+      \begin{block}{Rastreabilidade}
         \begin{itemize}
           \item Configuração e seeds versionadas
           \item Manifestos e hashes
@@ -236,14 +236,14 @@ Sebastião Sousa Soares}
   \centering
   \figuraresultado{mean_turnaround_ic95.png}
 
-  \small \textbf{Leitura:} Prioridade obteve o menor turnaround em todos os cenários; RR apresentou o maior, especialmente em CPU-bound. Barras mostram média e IC95\%, em ticks.
+  \small \textbf{Leitura:} Prioridade teve o menor turnaround em três cenários e SJF no I/O-bound; RR apresentou o maior, especialmente em CPU-bound. Barras mostram média e IC95\%, em ticks.
 \end{frame}
 
 \begin{frame}{Resultado 2: justiça de Jain do slowdown}
   \centering
   \figuraresultado{jain_slowdown_pct_ic95.png}
 
-  \small \textbf{Leitura:} RR é mais justo; Prioridade amplia a desigualdade. O eixo vertical está em porcentagem e as hastes representam IC95\%.
+  \small \textbf{Leitura:} RR alcança alta justiça, sobretudo em CPU-bound; Prioridade apresenta a maior desigualdade. O eixo vertical está em porcentagem e as hastes representam IC95\%.
 \end{frame}
 
 \begin{frame}{Resultado 3: trocas de contexto}
@@ -253,14 +253,21 @@ Sebastião Sousa Soares}
   \small \textbf{Leitura:} a preempção do RR eleva o custo, sobretudo em CPU-bound. O eixo vertical representa quantidade de trocas e as hastes, IC95\%.
 \end{frame}
 
+\begin{frame}{Convergência com o aumento da amostra}
+  \centering
+  \figuraresultado{comparativo_convergencia_ic95.png}
+
+  \small \textbf{Leitura:} as médias estabilizam progressivamente e os IC95\% estreitam de $N=10$ a $N=1.000$, aumentando a precisão sem alterar a tendência geral.
+\end{frame}
+
 \begin{frame}{Conclusão: o PDBH respondeu à hipótese}
   \begin{columns}[T,onlytextwidth]
     \column{.55\textwidth}
       \begin{block}{O que os dados mostraram}
         \begin{itemize}
-          \item PDBH não melhorou nenhuma métrica ou cenário
+          \item PDBH não apresentou vantagem prática nos cenários avaliados
           \item IC95\% praticamente sobreposto ao FCFS
-          \item Mesmo número de trocas das políticas não preemptivas
+          \item Mesmo número de trocas de FCFS e Prioridade
           \item Custo extra: recalcular a pontuação da fila
         \end{itemize}
       \end{block}
@@ -268,10 +275,10 @@ Sebastião Sousa Soares}
       \begin{block}{Por quê?}
         Sem preempção, processos esperam juntos e acumulam bônus semelhantes. A pontuação tende a preservar a ordem de chegada.
       \end{block}
-      \alert{Conclusão defendida:} histórico dinâmico isolado não basta. Próximo passo: investigar um PDBH preemptivo.
+      \alert{Conclusão:} neste modelo, o histórico dinâmico isolado não trouxe ganho. Próximo passo: investigar um PDBH preemptivo.
   \end{columns}
   \vfill
-  \centering\small Código testado • resultados auditáveis • artigo científico • responsabilidades registradas
+  \centering\small Código testado • resultados consolidados • artigo científico • responsabilidades registradas
 \end{frame}
 
 \end{document}
