@@ -669,8 +669,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="configs/default.conf")
     parser.add_argument("--binary", default="bin/simulador")
     parser.add_argument("--results-dir", default="results/raw")
-    parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 4,
-                        help="numero de tarefas simultaneas para execucao")
+    parser.add_argument("-j", "--jobs", type=int, default=1,
+                        help="numero de tarefas simultaneas (padrao: 1, com retomada segura)")
     profile = parser.add_mutually_exclusive_group()
     profile.add_argument("--reduced", action="store_true",
                          help="executa 1 cenario x 2 seeds x 4 algoritmos x 10 processos")
@@ -683,6 +683,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--verify-only", action="store_true",
                         help="valida completude sem executar nem alterar artefatos")
     parsed = parser.parse_args()
+    if parsed.jobs < 1:
+        parser.error("--jobs deve ser pelo menos 1")
     if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", parsed.experiment_id)
             or parsed.experiment_id in (".", "..")):
         parser.error("--experiment-id deve usar apenas letras, numeros, ponto, hifen e sublinhado")

@@ -38,7 +38,7 @@
 \maketitle
 
 \begin{abstract}
-Este artigo apresenta o desenvolvimento e a avaliação estatística de um simulador de escalonamento de processos para sistemas operacionais. Foram comparadas três políticas clássicas (FCFS, Round Robin e Prioridade Estática), uma política adaptada (SJF Não-Preemptivo com Estimativa) e uma abordagem própria denominada Prioridade Dinâmica Baseada em Histórico (PDBH). Através da execução de 20.000 simulações completas (4.000 cargas de trabalho distribuídas em quatro cenários sob 5 políticas com 1.000 sementes), avaliou-se o \textit{trade-off} entre o Tempo de Retorno (\textit{Turnaround}), a Equidade (Índice de Jain) e o custo sistêmico (Trocas de Contexto). Os resultados demonstram o alto nível de inanição em políticas de prioridade estática e os altos custos de troca de contexto do Round Robin. Em relação ao algoritmo proposto (PDBH), os dados revelam que aplicar pontuações dinâmicas de histórico em arquiteturas estritamente não preemptivas não traz benefícios na prática, cenário no qual o algoritmo não obteve ganhos, apresentando resultados estatisticamente equivalentes ao FCFS em todas as métricas observadas.
+Este artigo apresenta o desenvolvimento e a avaliação estatística de um simulador de escalonamento de processos para sistemas operacionais. Foram comparadas três políticas clássicas (FCFS, Round Robin e Prioridade Estática), uma política adaptada (SJF Não-Preemptivo com Estimativa) e uma abordagem própria denominada Prioridade Dinâmica Baseada em Histórico (PDBH). Através da execução de 20.000 simulações completas (4.000 cargas de trabalho distribuídas em quatro cenários sob 5 políticas com 1.000 sementes), avaliou-se o \textit{trade-off} entre o Tempo de Retorno (\textit{Turnaround}), a Equidade (Índice de Jain) e o custo sistêmico (Trocas de Contexto). Os resultados demonstram o alto nível de inanição em políticas de prioridade estática e os altos custos de troca de contexto do Round Robin. O PDBH não apresentou ganhos práticos nos cenários avaliados e produziu resultados muito próximos aos do FCFS.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -223,10 +223,10 @@ Um resultado notável nos dados é a quase perfeita igualdade no número de troc
     \item Por outro lado, o Round Robin é a única política estritamente preemptiva avaliada. Ao fatiar rajadas longas pelo \textit{quantum} ($q = 4$), o Round Robin multiplica as trocas de contexto em até 10,3 vezes (atingindo 20.717 trocas em CPU-Bound, contra apenas 1.998 nos não preemptivos).
 \end{itemize}
 
-\subsection{Análise e Equivalência do Algoritmo Próprio (PDBH)}
-O algoritmo PDBH não superou os modelos clássicos e apresentou sobreposição estatística completa de seus Intervalos de Confiança (IC95\%) com o FCFS em todos os cenários. A escala ampliada para $n = 1.000$ execuções reduziu a margem de erro dos intervalos de confiança em um fator de $\sqrt{10} \approx 3{,}16$ (redução de $\approx 68{,}4\%$), comprovando que essa equivalência não é ruído amostral, mas uma propriedade matemática intrínseca decorrente da \textbf{ausência de preempção}.
+\subsection{Comparação do Algoritmo Próprio (PDBH) com o FCFS}
+O algoritmo PDBH não superou os modelos clássicos e apresentou forte proximidade com o FCFS, com sobreposição dos Intervalos de Confiança (IC95\%) em todos os cenários. A escala ampliada para $n = 1.000$ execuções reduziu a margem de erro em aproximadamente $1 - 1/\sqrt{10} \approx 68{,}4\%$. Esta análise descritiva não demonstrou vantagem prática do PDBH; um teste pareado de equivalência seria necessário para afirmar equivalência estatística formal.
 
-Em cenários CPU-Bound, durante a execução de uma tarefa longa, todas as demais tarefas na fila acumulam bônus de espera na mesma taxa, mantendo inalterada a ordem relativa de chegada quando o processador é liberado. Em cenários I/O-Bound, os constantes bloqueios reiniciam o tempo na fila ($ready\_since$), impedindo que os processos atinjam os limiares de acúmulo de bônus. Assim, sem suporte a preempção instantânea, o PDBH degrada-se funcionalmente para o FCFS, adicionando apenas a complexidade computacional $O(N)$ de reordenação a cada despacho.
+Em cenários CPU-Bound, durante a execução de uma tarefa longa, as demais tarefas acumulam bônus de espera em taxas semelhantes, reduzindo o efeito da pontuação dinâmica. Em cenários I/O-Bound, os bloqueios reiniciam o tempo na fila ($ready\_since$), também limitando o acúmulo de bônus. Nos cenários avaliados, esses fatores fizeram o PDBH comportar-se de modo próximo ao FCFS, embora as políticas não sejam matematicamente idênticas.
 
 \subsection{Convergência Estatística ($N = 10$ a $N = 1000$)}
 A análise de sensibilidade amostral (Figura \ref{fig:convergencia}) evidencia a rápida convergência assintótica das médias à medida que a amostragem avança de $N = 10$ até $N = 1.000$. Observa-se que o ordenamento relativo dos algoritmos já se manifesta estável desde $N = 100$, enquanto a ampliação para $N = 1.000$ estreita as bandas de incerteza para amplitudes quase imperceptíveis, confirmando a robustez metodológica dos resultados.
@@ -238,7 +238,7 @@ A análise de sensibilidade amostral (Figura \ref{fig:convergencia}) evidencia a
 \end{figure}
 
 \section{Conclusão}
-A execução em larga escala (20.000 simulações com controle determinístico de sementes) comprovou formalmente os \textit{trade-offs} fundamentais da teoria de escalonamento. Os dados empíricos demonstraram que o algoritmo PDBH, devido à sua natureza estritamente não preemptiva, converge identicamente para a política FCFS, reforçando a premissa teórica de que políticas dinâmicas de histórico exigem fatiamento preemptivo de tempo para produzir efeitos práticos de balanceamento de carga e equidade.
+A execução em larga escala (20.000 simulações com controle determinístico de sementes) evidenciou os \textit{trade-offs} fundamentais das políticas avaliadas. Nos cenários estudados, o PDBH não apresentou vantagem prática sobre o FCFS e produziu resultados muito próximos, sugerindo que sua pontuação dinâmica teria maior oportunidade de produzir efeitos em uma variante preemptiva. Essa hipótese constitui uma direção natural para trabalhos futuros.
 
 \begin{thebibliography}{00}
 \bibitem{tanenbaum}

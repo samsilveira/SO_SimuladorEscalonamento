@@ -419,7 +419,6 @@ def render_figures(rows: list[dict[str, object]], temporary_paths: dict[str, Pat
                 error_kw={"ecolor": "black", "elinewidth": 1.1, "capthick": 1.1},
             )
         axis.set_title(str(metadata["title"]), fontweight="bold")
-        axis.set_xlabel("Cenário")
         axis.set_ylabel(str(metadata["label"]))
         axis.set_xticks(group_centers, [SCENARIO_LABELS[item] for item in SCENARIOS])
         axis.grid(axis="y", color="#d9d9d9", linewidth=0.7)

@@ -133,8 +133,7 @@ make graphs   # gera results/figures/
 ## Reproduzir resultados do artigo
 
 ```sh
-git checkout experiment-v1
-make batch && make graphs
+make batch && make graphs && make comparison-graphs
 ```
 
 Execução com configuração padrão e resultado agregado:
@@ -195,7 +194,8 @@ matriz precisam coincidir; em caso de mudança, escolha um novo `--experiment-id
 Durante o lote, o terminal mostra resultados e workloads válidos, tempo decorrido e
 ETA; o resumo do manifesto é atualizado após cada tentativa.
 
-`Ctrl+C` registra a execução corrente como `interrupted` e preserva o progresso. Para
+No modo padrão (`--jobs 1`), `Ctrl+C` registra a execução corrente como `interrupted`
+e preserva o progresso. Para
 retomar o lote principal, execute apenas `make batch`. Não use `make clean` antes da
 retomada, pois esse alvo remove todo o diretório `results/raw`.
 

@@ -160,9 +160,16 @@ def create_archive(experiment_dir: Path, relative_files: list[Path], target: Pat
 
 
 def published_hashes(repo: Path, summary: Path, figures_dir: Path) -> dict[str, str]:
-    paths = [summary, *sorted(figures_dir.glob("*.png"))]
-    if len(paths) != 4 or any(not path.is_file() for path in paths):
-        raise EvidenceError("summary.csv e os tres graficos PNG devem existir")
+    required_figures = {
+        "mean_turnaround_ic95.png",
+        "context_switches_ic95.png",
+        "jain_slowdown_pct_ic95.png",
+    }
+    figures = sorted(figures_dir.glob("*.png"))
+    if (not summary.is_file()
+            or not required_figures.issubset({path.name for path in figures})):
+        raise EvidenceError("summary.csv e os tres graficos principais devem existir")
+    paths = [summary, *figures]
     return {os.path.relpath(path, repo): sha256(path) for path in paths}
 
 

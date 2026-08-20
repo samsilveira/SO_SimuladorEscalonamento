@@ -46,6 +46,17 @@ class StatisticsTests(unittest.TestCase):
             API["require_integer"]("0", "makespan", minimum=1)
 
 
+class ComparisonTests(unittest.TestCase):
+    def test_comparison_rejects_missing_raw_matrix(self):
+        comparison = runpy.run_path(str(REPO / "scripts" / "generate_sample_comparison.py"))
+        original = comparison["RAW_DIR"]
+        with tempfile.TemporaryDirectory() as temporary:
+            comparison["load_all_runs"].__globals__["RAW_DIR"] = Path(temporary)
+            with self.assertRaisesRegex(comparison["ComparisonError"], "matriz bruta incompleta"):
+                comparison["load_all_runs"]()
+        comparison["load_all_runs"].__globals__["RAW_DIR"] = original
+
+
 class AnalysisIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

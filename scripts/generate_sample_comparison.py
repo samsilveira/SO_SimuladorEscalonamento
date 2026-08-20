@@ -30,6 +30,12 @@ ALGORITHM_COLORS = {
     "proprio": "#1b9e77",
     "sjf": "#e7298a",
 }
+
+
+class ComparisonError(RuntimeError):
+    """Indica que a matriz bruta não permite gerar uma comparação válida."""
+
+
 SCENARIO_TITLES = {
     "equilibrado": "Equilibrado",
     "io_bound": "I/O-Bound",
@@ -50,13 +56,26 @@ def load_all_runs() -> dict[tuple[str, str], list[dict]]:
                     continue
                 with path.open(encoding="utf-8") as f:
                     reader = csv.DictReader(f)
-                    row = next(reader)
+                    rows = list(reader)
+                    if len(rows) != 1:
+                        raise ComparisonError(f"resultado inválido: {path}")
+                    row = rows[0]
                     runs_by_pair[(scenario, alg)].append({
                         "seed": seed,
                         "mean_turnaround": float(row["mean_turnaround"]),
                         "context_switches": float(row["context_switches"]),
                         "jain_slowdown_pct": float(row["jain_slowdown_pct"]),
                     })
+    incomplete = [
+        f"{scenario}/{algorithm}: {len(runs)} de 1000"
+        for (scenario, algorithm), runs in runs_by_pair.items()
+        if len(runs) != 1000
+    ]
+    if incomplete:
+        raise ComparisonError(
+            "matriz bruta incompleta; execute 'make batch' antes da comparação ("
+            + "; ".join(incomplete[:3]) + ("; ..." if len(incomplete) > 3 else "") + ")"
+        )
     return runs_by_pair
 
 
@@ -188,4 +207,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (ComparisonError, OSError, ValueError, csv.Error) as error:
+        raise SystemExit(f"Erro: {error}")
