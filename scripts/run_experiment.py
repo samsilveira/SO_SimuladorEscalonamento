@@ -318,10 +318,12 @@ def execution_shape(reduced: bool, pilot: bool) -> tuple[tuple[str, ...], int, i
         return SCENARIOS, 1, 10, 1000
     if reduced:
         return ("equilibrado",), 1, 2, 10
-    return SCENARIOS, 1, 100, 1000
+    return SCENARIOS, 1, 1000, 1000
 
 
 def execute(args: argparse.Namespace) -> int:
+    import concurrent.futures
+
     repo = Path(__file__).resolve().parent.parent
     binary = (repo / args.binary).resolve() if not Path(args.binary).is_absolute() else Path(args.binary)
     config = (repo / args.config).resolve() if not Path(args.config).is_absolute() else Path(args.config)
@@ -371,6 +373,15 @@ def execute(args: argparse.Namespace) -> int:
     atomic_json(manifest_path, manifest)
     progress_started = time.monotonic()
     session_attempts = 0
+    last_manifest_save = 0.0
+
+    def maybe_save_manifest(force: bool = False) -> None:
+        nonlocal last_manifest_save
+        current = time.monotonic()
+        if force or (current - last_manifest_save) >= 2.0:
+            atomic_json(manifest_path, manifest)
+            last_manifest_save = current
+
     print(
         f"Experimento {args.experiment_id}: iniciando em {runs}/{expected_r} resultados validos; "
         f"{workloads}/{expected_w} workloads. Para interromper com retomada segura, use Ctrl+C.",
@@ -381,128 +392,261 @@ def execute(args: argparse.Namespace) -> int:
                   for item in manifest["runs"]}
     failures = 0
     attempted_any = False
-    for workload_entry in manifest["workloads"]:
-        scenario, seed = workload_entry["scenario"], workload_entry["seed"]
-        workload_key = (scenario, seed)
-        workload_path = root / workload_entry["path"]
-        valid_workload, workload_reason = workload_valid(root, workload_entry)
-        if valid_workload:
-            valid_workloads.add(workload_key)
-        else:
-            valid_workloads.discard(workload_key)
-        for algorithm in algorithms:
-            run_key = (scenario, seed, algorithm)
-            run = run_by_key[(scenario, seed, algorithm)]
-            run["workload_sha256"] = workload_entry.get("workload_sha256")
-            valid_result = False
-            validation_reason = f"workload invalido: {workload_reason}"
+
+    jobs = 1 if args.reduced else max(1, getattr(args, "jobs", os.cpu_count() or 4))
+
+    if jobs == 1:
+        for workload_entry in manifest["workloads"]:
+            scenario, seed = workload_entry["scenario"], workload_entry["seed"]
+            workload_key = (scenario, seed)
+            workload_path = root / workload_entry["path"]
+            valid_workload, workload_reason = workload_valid(root, workload_entry)
             if valid_workload:
-                valid_result, validation_reason = validate_result(
-                    root / run["result_path"], run, run.get("result_sha256")
-                )
-            if valid_result:
-                run["status"] = "success"
-                if run_key not in valid_runs:
-                    valid_runs.add(run_key)
-                    update_summary(manifest, valid_workloads, valid_runs)
-                    atomic_json(manifest_path, manifest)
-                    report_progress(run["run_id"], "revalidado", valid_workloads, valid_runs,
-                                    expected_w, expected_r, progress_started, session_attempts)
-                continue
-            valid_runs.discard(run_key)
-
-            command = [str(binary), "--config", str(config), "--scenario", scenario,
-                       "--seed", str(seed), "--processes", str(count),
-                       "--context-switch-cost", "1", "--rr-quantum", "4",
-                       "--algorithm", algorithm, "--run-id", run["run_id"]]
-            if not valid_workload:
-                if algorithm != "fcfs":
-                    continue
-                command += ["--workload-output", str(workload_path)]
+                valid_workloads.add(workload_key)
             else:
-                command += ["--workload-input", str(workload_path)]
-            command += ["--output", str(root / run["result_path"])]
-            if run["attempts"] > 0:
-                run["reexecutions"].append({
-                    "attempt": run["attempts"] + 1, "at": now(),
-                    "reason": validation_reason,
-                })
-            run["attempts"] += 1
-            session_attempts += 1
-            attempted_any = True
-            run["started_at"] = now()
-            run["finished_at"] = None
-            run["command"] = shlex.join(command)
-            run["status"] = "running"
-            update_summary(manifest, valid_workloads, valid_runs)
-            atomic_json(manifest_path, manifest)
-            try:
-                completed = subprocess.run(command, cwd=repo, text=True, stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE, check=False)
-            except KeyboardInterrupt:
-                run["finished_at"] = now()
-                run["status"] = "interrupted"
-                run["failures"].append({
-                    "attempt": run["attempts"], "at": now(), "exit_code": 130,
-                    "message": "execucao interrompida pelo usuario",
-                })
-                manifest["finished_at"] = None
-                update_summary(manifest, valid_workloads, valid_runs)
-                atomic_json(manifest_path, manifest)
-                report_progress(run["run_id"], "interrompido", valid_workloads, valid_runs,
-                                expected_w, expected_r, progress_started, session_attempts)
-                print(
-                    "Interrompido com seguranca. Execute novamente sem 'make clean' para retomar.",
-                    file=sys.stderr, flush=True,
-                )
-                return 130
-            run["finished_at"] = now()
-            if completed.returncode != 0:
-                message = (completed.stderr or completed.stdout or "falha sem mensagem").strip()
-                run["status"] = "failed"
-                run["failures"].append({"attempt": run["attempts"], "at": now(),
-                                        "exit_code": completed.returncode, "message": message[-4000:]})
-                failures += 1
-                update_summary(manifest, valid_workloads, valid_runs)
-                atomic_json(manifest_path, manifest)
-                report_progress(run["run_id"], "falhou", valid_workloads, valid_runs,
-                                expected_w, expected_r, progress_started, session_attempts)
-                break
+                valid_workloads.discard(workload_key)
+            for algorithm in algorithms:
+                run_key = (scenario, seed, algorithm)
+                run = run_by_key[(scenario, seed, algorithm)]
+                run["workload_sha256"] = workload_entry.get("workload_sha256")
+                valid_result = False
+                validation_reason = f"workload invalido: {workload_reason}"
+                if valid_workload:
+                    valid_result, validation_reason = validate_result(
+                        root / run["result_path"], run, run.get("result_sha256")
+                    )
+                if valid_result:
+                    run["status"] = "success"
+                    if run_key not in valid_runs:
+                        valid_runs.add(run_key)
+                        update_summary(manifest, valid_workloads, valid_runs)
+                        maybe_save_manifest()
+                        report_progress(run["run_id"], "revalidado", valid_workloads, valid_runs,
+                                        expected_w, expected_r, progress_started, session_attempts)
+                    continue
+                valid_runs.discard(run_key)
 
-            if not valid_workload:
-                if not workload_path.is_file():
+                command = [str(binary), "--config", str(config), "--scenario", scenario,
+                           "--seed", str(seed), "--processes", str(count),
+                           "--context-switch-cost", "1", "--rr-quantum", "4",
+                           "--algorithm", algorithm, "--run-id", run["run_id"]]
+                if not valid_workload:
+                    if algorithm != "fcfs":
+                        continue
+                    command += ["--workload-output", str(workload_path)]
+                else:
+                    command += ["--workload-input", str(workload_path)]
+                command += ["--output", str(root / run["result_path"])]
+                if run["attempts"] > 0:
+                    run["reexecutions"].append({
+                        "attempt": run["attempts"] + 1, "at": now(),
+                        "reason": validation_reason,
+                    })
+                run["attempts"] += 1
+                session_attempts += 1
+                attempted_any = True
+                run["started_at"] = now()
+                run["finished_at"] = None
+                run["command"] = shlex.join(command)
+                run["status"] = "running"
+                update_summary(manifest, valid_workloads, valid_runs)
+                maybe_save_manifest()
+                try:
+                    completed = subprocess.run(command, cwd=repo, text=True, stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE, check=False)
+                except KeyboardInterrupt:
+                    run["finished_at"] = now()
+                    run["status"] = "interrupted"
+                    run["failures"].append({
+                        "attempt": run["attempts"], "at": now(), "exit_code": 130,
+                        "message": "execucao interrompida pelo usuario",
+                    })
+                    manifest["finished_at"] = None
+                    update_summary(manifest, valid_workloads, valid_runs)
+                    maybe_save_manifest(force=True)
+                    report_progress(run["run_id"], "interrompido", valid_workloads, valid_runs,
+                                    expected_w, expected_r, progress_started, session_attempts)
+                    print(
+                        "Interrompido com seguranca. Execute novamente sem 'make clean' para retomar.",
+                        file=sys.stderr, flush=True,
+                    )
+                    return 130
+                run["finished_at"] = now()
+                if completed.returncode != 0:
+                    message = (completed.stderr or completed.stdout or "falha sem mensagem").strip()
                     run["status"] = "failed"
                     run["failures"].append({"attempt": run["attempts"], "at": now(),
-                                            "exit_code": 0, "message": "workload nao foi publicado"})
+                                            "exit_code": completed.returncode, "message": message[-4000:]})
                     failures += 1
                     update_summary(manifest, valid_workloads, valid_runs)
-                    atomic_json(manifest_path, manifest)
+                    maybe_save_manifest()
                     report_progress(run["run_id"], "falhou", valid_workloads, valid_runs,
                                     expected_w, expected_r, progress_started, session_attempts)
                     break
-                workload_entry["workload_sha256"] = sha256(workload_path)
-                workload_entry["status"] = "success"
-                valid_workload = True
-                valid_workloads.add(workload_key)
-                run["workload_sha256"] = workload_entry["workload_sha256"]
 
-            result_path = root / run["result_path"]
-            run["result_sha256"] = sha256(result_path) if result_path.is_file() else None
-            run["status"] = "success"
-            valid_result, reason = validate_result(result_path, run, run["result_sha256"])
-            if not valid_result:
-                run["status"] = "failed"
-                run["failures"].append({"attempt": run["attempts"], "at": now(),
-                                        "exit_code": 0, "message": reason})
-                failures += 1
-                valid_runs.discard(run_key)
-            else:
+                if not valid_workload:
+                    if not workload_path.is_file():
+                        run["status"] = "failed"
+                        run["failures"].append({"attempt": run["attempts"], "at": now(),
+                                                "exit_code": 0, "message": "workload nao foi publicado"})
+                        failures += 1
+                        update_summary(manifest, valid_workloads, valid_runs)
+                        maybe_save_manifest()
+                        report_progress(run["run_id"], "falhou", valid_workloads, valid_runs,
+                                        expected_w, expected_r, progress_started, session_attempts)
+                        break
+                    workload_entry["workload_sha256"] = sha256(workload_path)
+                    workload_entry["status"] = "success"
+                    valid_workload = True
+                    valid_workloads.add(workload_key)
+                    run["workload_sha256"] = workload_entry["workload_sha256"]
+
+                result_path = root / run["result_path"]
+                run["result_sha256"] = sha256(result_path) if result_path.is_file() else None
                 run["status"] = "success"
-                valid_runs.add(run_key)
-            update_summary(manifest, valid_workloads, valid_runs)
-            atomic_json(manifest_path, manifest)
-            report_progress(run["run_id"], run["status"], valid_workloads, valid_runs,
-                            expected_w, expected_r, progress_started, session_attempts)
+                valid_result, reason = validate_result(result_path, run, run["result_sha256"])
+                if not valid_result:
+                    run["status"] = "failed"
+                    run["failures"].append({"attempt": run["attempts"], "at": now(),
+                                            "exit_code": 0, "message": reason})
+                    failures += 1
+                    valid_runs.discard(run_key)
+                else:
+                    run["status"] = "success"
+                    valid_runs.add(run_key)
+                update_summary(manifest, valid_workloads, valid_runs)
+                maybe_save_manifest()
+                report_progress(run["run_id"], run["status"], valid_workloads, valid_runs,
+                                expected_w, expected_r, progress_started, session_attempts)
+    else:
+        # Modo concorrente com ThreadPoolExecutor
+        # 1. Geracao de workloads pendentes
+        pending_workloads = [
+            w for w in manifest["workloads"]
+            if not workload_valid(root, w)[0]
+        ]
+        if pending_workloads:
+            def run_gen(w_entry: dict):
+                sc, sd = w_entry["scenario"], w_entry["seed"]
+                w_path = root / w_entry["path"]
+                fcfs_run = run_by_key[(sc, sd, "fcfs")]
+                cmd = [str(binary), "--config", str(config), "--scenario", sc,
+                       "--seed", str(sd), "--processes", str(count),
+                       "--context-switch-cost", "1", "--rr-quantum", "4",
+                       "--algorithm", "fcfs", "--run-id", fcfs_run["run_id"],
+                       "--workload-output", str(w_path),
+                       "--output", str(root / fcfs_run["result_path"])]
+                if fcfs_run["attempts"] > 0:
+                    fcfs_run["reexecutions"].append({
+                        "attempt": fcfs_run["attempts"] + 1, "at": now(),
+                        "reason": "workload invalido ou reexecucao",
+                    })
+                fcfs_run["started_at"] = now()
+                fcfs_run["command"] = shlex.join(cmd)
+                fcfs_run["attempts"] += 1
+                res = subprocess.run(cmd, cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                return w_entry, fcfs_run, res
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+                futures = [pool.submit(run_gen, w) for w in pending_workloads]
+                for future in concurrent.futures.as_completed(futures):
+                    w_entry, fcfs_run, res = future.result()
+                    sc, sd = w_entry["scenario"], w_entry["seed"]
+                    w_path = root / w_entry["path"]
+                    fcfs_run["finished_at"] = now()
+                    attempted_any = True
+                    session_attempts += 1
+                    if res.returncode == 0 and w_path.is_file():
+                        w_entry["workload_sha256"] = sha256(w_path)
+                        w_entry["status"] = "success"
+                        valid_workloads.add((sc, sd))
+                        fcfs_run["workload_sha256"] = w_entry["workload_sha256"]
+                        r_path = root / fcfs_run["result_path"]
+                        fcfs_run["result_sha256"] = sha256(r_path) if r_path.is_file() else None
+                        fcfs_run["status"] = "success"
+                        valid_r, r_reason = validate_result(r_path, fcfs_run, fcfs_run["result_sha256"])
+                        if valid_r:
+                            valid_runs.add((sc, sd, "fcfs"))
+                        else:
+                            fcfs_run["status"] = "failed"
+                            fcfs_run["failures"].append({"attempt": fcfs_run["attempts"], "at": now(), "exit_code": 0, "message": r_reason})
+                            failures += 1
+                    else:
+                        fcfs_run["status"] = "failed"
+                        fcfs_run["failures"].append({"attempt": fcfs_run["attempts"], "at": now(), "exit_code": res.returncode, "message": (res.stderr or res.stdout or "falha").strip()[-4000:]})
+                        failures += 1
+                    update_summary(manifest, valid_workloads, valid_runs)
+                    maybe_save_manifest()
+                    report_progress(f"workload-{sc}-{sd}", w_entry["status"], valid_workloads, valid_runs,
+                                    expected_w, expected_r, progress_started, session_attempts)
+
+        # 2. Execucao das simulacoes pendentes
+        workload_map = {(w["scenario"], w["seed"]): w for w in manifest["workloads"]}
+        pending_runs = []
+        for run in manifest["runs"]:
+            sc, sd, alg = run["scenario"], run["seed"], run["algorithm"]
+            w_entry = workload_map[(sc, sd)]
+            run["workload_sha256"] = w_entry.get("workload_sha256")
+            valid_r, r_reason = validate_result(root / run["result_path"], run, run.get("result_sha256"))
+            if valid_r:
+                run["status"] = "success"
+                valid_runs.add((sc, sd, alg))
+            else:
+                valid_runs.discard((sc, sd, alg))
+                pending_runs.append((run, r_reason))
+
+        update_summary(manifest, valid_workloads, valid_runs)
+        maybe_save_manifest()
+
+        if pending_runs:
+            def run_sim(item: tuple[dict, str]):
+                run, reason = item
+                sc, sd, alg = run["scenario"], run["seed"], run["algorithm"]
+                w_path = root / workload_map[(sc, sd)]["path"]
+                cmd = [str(binary), "--config", str(config), "--scenario", sc,
+                       "--seed", str(sd), "--processes", str(count),
+                       "--context-switch-cost", "1", "--rr-quantum", "4",
+                       "--algorithm", alg, "--run-id", run["run_id"],
+                       "--workload-input", str(w_path),
+                       "--output", str(root / run["result_path"])]
+                if run["attempts"] > 0:
+                    run["reexecutions"].append({
+                        "attempt": run["attempts"] + 1, "at": now(),
+                        "reason": reason,
+                    })
+                run["started_at"] = now()
+                run["command"] = shlex.join(cmd)
+                run["attempts"] += 1
+                res = subprocess.run(cmd, cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                return run, res
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+                futures = [pool.submit(run_sim, item) for item in pending_runs]
+                for future in concurrent.futures.as_completed(futures):
+                    run, res = future.result()
+                    sc, sd, alg = run["scenario"], run["seed"], run["algorithm"]
+                    run["finished_at"] = now()
+                    attempted_any = True
+                    session_attempts += 1
+                    r_path = root / run["result_path"]
+                    if res.returncode == 0 and r_path.is_file():
+                        run["result_sha256"] = sha256(r_path)
+                        run["status"] = "success"
+                        valid_r, r_reason = validate_result(r_path, run, run["result_sha256"])
+                        if valid_r:
+                            valid_runs.add((sc, sd, alg))
+                        else:
+                            run["status"] = "failed"
+                            run["failures"].append({"attempt": run["attempts"], "at": now(), "exit_code": 0, "message": r_reason})
+                            failures += 1
+                    else:
+                        run["status"] = "failed"
+                        run["failures"].append({"attempt": run["attempts"], "at": now(), "exit_code": res.returncode, "message": (res.stderr or res.stdout or "falha").strip()[-4000:]})
+                        failures += 1
+                    update_summary(manifest, valid_workloads, valid_runs)
+                    maybe_save_manifest()
+                    report_progress(run["run_id"], run["status"], valid_workloads, valid_runs,
+                                    expected_w, expected_r, progress_started, session_attempts)
 
     valid_workloads, valid_runs = validated_artifacts(manifest, root)
     workloads, runs = update_summary(manifest, valid_workloads, valid_runs)
@@ -525,6 +669,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="configs/default.conf")
     parser.add_argument("--binary", default="bin/simulador")
     parser.add_argument("--results-dir", default="results/raw")
+    parser.add_argument("-j", "--jobs", type=int, default=1,
+                        help="numero de tarefas simultaneas (padrao: 1, com retomada segura)")
     profile = parser.add_mutually_exclusive_group()
     profile.add_argument("--reduced", action="store_true",
                          help="executa 1 cenario x 2 seeds x 4 algoritmos x 10 processos")
@@ -537,6 +683,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--verify-only", action="store_true",
                         help="valida completude sem executar nem alterar artefatos")
     parsed = parser.parse_args()
+    if parsed.jobs < 1:
+        parser.error("--jobs deve ser pelo menos 1")
     if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", parsed.experiment_id)
             or parsed.experiment_id in (".", "..")):
         parser.error("--experiment-id deve usar apenas letras, numeros, ponto, hifen e sublinhado")

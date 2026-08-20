@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regressoes do empacotamento da evidencia experimental da ISSUE-15."""
 
+import hashlib
 from pathlib import Path
 import runpy
 import sys
@@ -16,6 +17,26 @@ API = runpy.run_path(str(PACKAGER))
 
 
 class EvidencePackageTests(unittest.TestCase):
+    def test_published_hashes_accepts_additional_figures(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            summary = root / "summary.csv"
+            figures = root / "figures"
+            figures.mkdir()
+            summary.write_text("header\n", encoding="utf-8")
+            names = (
+                "mean_turnaround_ic95.png", "context_switches_ic95.png",
+                "jain_slowdown_pct_ic95.png", "comparativo_convergencia_ic95.png",
+            )
+            for name in names:
+                (figures / name).write_bytes(name.encode())
+            hashes = API["published_hashes"](root, summary, figures)
+            self.assertEqual(1 + len(names), len(hashes))
+            self.assertEqual(
+                hashlib.sha256(names[-1].encode()).hexdigest(),
+                hashes[f"figures/{names[-1]}"],
+            )
+
     def test_raw_tree_rejects_symbolic_links_before_packaging(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -76,7 +97,7 @@ class EvidencePackageTests(unittest.TestCase):
                 "binary_sha256": "a" * 64,
                 "started_at": "2026-08-19T00:00:00+00:00",
                 "finished_at": "2026-08-19T00:01:00+00:00",
-                "summary": {"valid_workloads": 400, "successful_runs": 2000},
+                "summary": {"valid_workloads": 4000, "successful_runs": 20000},
             }
             first = API["build_record"](
                 manifest, "experiment-v1", "b" * 40, "d" * 64, archive, snapshot,

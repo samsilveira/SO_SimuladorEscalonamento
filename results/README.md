@@ -34,6 +34,17 @@ retomada.
 Resultados estatísticos pequenos e revisados pertencem a `consolidated/`; gráficos
 finais pertencem a `figures/`.
 
+## Por que vários resultados são iguais ou muito próximos?
+
+FCFS, Prioridade, PDBH e SJF são políticas não preemptivas: depois de receber a CPU,
+um processo executa sua rajada até terminar ou iniciar E/S. Como todos usam as mesmas
+cargas, eles processam a mesma quantidade de rajadas e bloqueios; por isso, o número
+de trocas de contexto tende a ser igual ou quase igual, embora a ordem de execução e
+o turnaround possam mudar. FCFS e PDBH também ficaram muito próximos porque os
+processos em espera acumulam bônus semelhantes e o retorno de E/S reinicia o tempo
+na fila, reduzindo o efeito prático da prioridade dinâmica. Essa proximidade não
+significa que os algoritmos sejam matematicamente idênticos.
+
 ## Piloto reproduzível
 
 O piloto da auditoria usa os mesmos quatro cenários e 1.000 processos do lote principal,
@@ -49,7 +60,7 @@ O perfil `batch-reduced` continua sendo apenas uma regressão rápida de desenvo
 
 ## Consolidacao estatistica
 
-Depois que `results/raw/main/manifest.json` registrar as 1.600 execucoes validas,
+Depois que `results/raw/main/manifest.json` registrar as 20.000 execuções válidas,
 regenere todos os artefatos com um comando:
 
 ```sh
@@ -58,7 +69,7 @@ make graphs
 
 O Make cria `.venv/` quando necessario, instala nela a dependencia direta fixada em `requirements-analysis.txt` e executa o analisador com `.venv/bin/python`. O arquivo de controle da instalacao so e atualizado depois que o `pip` termina com sucesso; alterar o arquivo de requisitos provoca uma nova instalacao automaticamente.
 
-O comando revalida o manifesto, os hashes e cada CSV antes de publicar qualquer arquivo. Cada uma das 16 combinacoes de cenario e algoritmo deve conter exatamente as seeds 1 a 100; ausencias, duplicatas, `NaN`, infinito e valores impossiveis interrompem a consolidacao. O commit registrado tambem deve conter a implementacao do PDBH; lotes anteriores sao preservados, mas nao podem gerar resultados finais.
+O comando revalida o manifesto, os hashes e cada CSV antes de publicar qualquer arquivo. Cada uma das 20 combinações de cenário e algoritmo deve conter exatamente as seeds 1 a 1.000; ausências, duplicatas, `NaN`, infinito e valores impossíveis interrompem a consolidação.
 Para analisar outro ID sem renomear seus dados, use `make graphs EXPERIMENT_ID=<id>`. A saida e `consolidated/summary.csv`, com media, desvio padrao amostral (`n - 1`) e IC95%, alem de tres PNGs a 300 DPI em `figures/`.
 
 ## Preservação e publicação da evidência
@@ -72,7 +83,7 @@ make evidence
 make evidence-verify
 ```
 
-O empacotador revalida os 400 workloads e 1.600 resultados, exige que o commit do
+O empacotador revalida os 4.000 workloads e 20.000 resultados, exige que o commit do
 manifesto coincida exatamente com a tag registrada e rejeita arquivos ausentes,
 extras ou links simbólicos. São produzidos em `results/evidence/`:
 

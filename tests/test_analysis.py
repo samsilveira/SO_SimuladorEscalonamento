@@ -46,6 +46,17 @@ class StatisticsTests(unittest.TestCase):
             API["require_integer"]("0", "makespan", minimum=1)
 
 
+class ComparisonTests(unittest.TestCase):
+    def test_comparison_rejects_missing_raw_matrix(self):
+        comparison = runpy.run_path(str(REPO / "scripts" / "generate_sample_comparison.py"))
+        original = comparison["RAW_DIR"]
+        with tempfile.TemporaryDirectory() as temporary:
+            comparison["load_all_runs"].__globals__["RAW_DIR"] = Path(temporary)
+            with self.assertRaisesRegex(comparison["ComparisonError"], "matriz bruta incompleta"):
+                comparison["load_all_runs"]()
+        comparison["load_all_runs"].__globals__["RAW_DIR"] = original
+
+
 class AnalysisIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -114,16 +125,16 @@ class AnalysisIntegrationTests(unittest.TestCase):
             "config": {
                 "effective": {"process_count": 1000, "context_switch_cost": 1, "rr_quantum": 4},
                 "scenarios": list(API["SCENARIOS"]),
-                "seeds": {"first": 1, "last": 100},
+                "seeds": {"first": 1, "last": 1000},
                 "algorithms": list(API["ALGORITHMS"]),
             },
             "workloads": workloads,
             "runs": runs,
             "summary": {
-                "expected_workloads": 400,
-                "valid_workloads": 400,
-                "expected_runs": 2000,
-                "successful_runs": 2000,
+                "expected_workloads": 4000,
+                "valid_workloads": 4000,
+                "expected_runs": 20000,
+                "successful_runs": 20000,
             },
         }
         (cls.experiment / "manifest.json").write_text(
@@ -164,19 +175,19 @@ class AnalysisIntegrationTests(unittest.TestCase):
 
     def test_single_command_generates_summary_and_three_300_dpi_figures(self):
         completed = self.invoke()
-        self.assertIn("2000 observacoes validas", completed.stdout)
+        self.assertIn("20000 observacoes validas", completed.stdout)
         with self.summary.open(encoding="utf-8", newline="") as stream:
             rows = list(csv.DictReader(stream))
         self.assertEqual(60, len(rows))
-        self.assertEqual({"100"}, {row["n"] for row in rows})
+        self.assertEqual({"1000"}, {row["n"] for row in rows})
         first = next(
             row for row in rows
             if row["scenario"] == "equilibrado"
             and row["algorithm"] == "fcfs"
             and row["metric"] == "mean_turnaround"
         )
-        self.assertAlmostEqual(50.5, float(first["mean"]))
-        self.assertAlmostEqual(math.sqrt(841.6666666666666), float(first["std"]))
+        self.assertAlmostEqual(500.5, float(first["mean"]))
+        self.assertAlmostEqual(math.sqrt(83416.66666666667), float(first["std"]))
         expected_names = {metadata["filename"] for metadata in API["METRICS"].values()}
         self.assertEqual(expected_names, {path.name for path in self.figures.glob("*.png")})
         for path in self.figures.glob("*.png"):

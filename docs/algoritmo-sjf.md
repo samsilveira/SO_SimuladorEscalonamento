@@ -63,6 +63,6 @@ O SJF opera de forma **não-preemptiva**:
 Para viabilizar a comparação justa sem comprometer os quatro algoritmos obrigatórios e os manifestos principais:
 
 1. **Isolamento de Execução:** O SJF é executado através de perfis separados:
-   - `make batch-sjf`: executa os 4 cenários $\times$ 100 seeds $\times$ 5 algoritmos (FCFS, RR, Prioridade, Próprio e SJF) sob o mesmo custo de troca e sementes.
+   - `make batch-sjf`: executa os 4 cenários $\times$ 1.000 seeds $\times$ 5 algoritmos (FCFS, RR, Prioridade, Próprio e SJF) sob o mesmo custo de troca e sementes.
    - `make batch-sjf-reduced`: executa o smoke-test reduzido de 10 execuções para validação rápida.
 2. **Consistência de Carga:** Os mesmos workloads sintéticos gerados por PCG32 são compartilhados entre os 5 algoritmos, garantindo pareamento estatístico idêntico.
